@@ -3,57 +3,48 @@ import type {
   GroupRowSpan,
   HeightGroup,
   OperationStep,
-  TeacherLayout,
+  TeacherRowSummary,
 } from "./types";
 
 export interface CommandContext {
   groups: HeightGroup[];
   spans: GroupRowSpan[];
-  teacherLayout: TeacherLayout;
-  teacherCount: number;
-  standingRowNumber: number;
+  /** Rows containing teachers, front first. */
+  teacherRows: TeacherRowSummary[];
+  totalTeachers: number;
 }
 
-function teacherSteps(ctx: CommandContext): OperationStep[] {
-  if (ctx.teacherCount <= 0) return [];
-  switch (ctx.teacherLayout) {
-    case "front-seated":
-      return [
-        {
-          kind: "call",
-          heading: "NOW CALL",
-          primary: "TEACHERS",
-          detail: "Take your seats in the front row",
-        },
-      ];
-    case "front-standing":
-      return [
-        {
-          kind: "call",
-          heading: "NOW CALL",
-          primary: "TEACHERS",
-          detail: "Stand in the centre of Row 1",
-        },
-      ];
-    case "mixed":
-      return [
-        {
-          kind: "call",
-          heading: "NOW CALL",
-          primary: "TEACHERS",
-          detail: `Seated teachers to the front row, standing teachers to the centre of Row ${ctx.standingRowNumber}`,
-        },
-      ];
+/** One-line description of where the teachers go. */
+export function teacherPlacementSummary(ctx: CommandContext): string {
+  if (ctx.totalTeachers <= 0 || ctx.teacherRows.length === 0) return "";
+  const [front, ...overflow] = ctx.teacherRows;
+  let summary = `Front row (Row ${front.rowNumber}) — principal in the centre`;
+  if (overflow.length > 0) {
+    summary +=
+      "; " +
+      overflow
+        .map((r) => `${r.count} to Row ${r.rowNumber}, spread between students`)
+        .join("; ");
   }
+  return summary;
 }
 
 /**
- * Ordered steps for Operation Mode: teachers first, then height groups
- * tallest-to-shortest, then the final tidy-up directions.
+ * Ordered steps for Operation Mode: teachers first, then one queue per
+ * row block (tallest first), then the final tidy-up directions.
  */
 export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
   const spanByGroup = new Map(ctx.spans.map((s) => [s.groupId, s]));
-  const steps: OperationStep[] = [...teacherSteps(ctx)];
+  const steps: OperationStep[] = [];
+
+  if (ctx.totalTeachers > 0 && ctx.teacherRows.length > 0) {
+    steps.push({
+      kind: "call",
+      heading: "NOW CALL",
+      primary: "TEACHERS",
+      detail: teacherPlacementSummary(ctx),
+    });
+  }
 
   ctx.groups
     .filter((g) => g.count > 0)
@@ -65,14 +56,19 @@ export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
         heading: "NOW CALL",
         primary: `QUEUE ${letter}`,
         detail: span
-          ? `${group.id} — fill ${formatRowRange(span.fromRow, span.toRow)}`
+          ? `${group.id} — fill ${formatRowRange(span.fromRow, span.toRow)}, tallest leads`
           : `${group.id} — move to your row`,
         queueLetter: letter,
       });
     });
 
   steps.push(
-    { kind: "direction", heading: "EVERYONE", primary: "FILL FROM CENTRE", detail: "Close the gaps towards the middle" },
+    {
+      kind: "direction",
+      heading: "EACH ROW",
+      primary: "TAPER FROM CENTRE",
+      detail: "Fill left of centre first, then right — tallest in the middle",
+    },
     { kind: "direction", heading: "EVERYONE", primary: "MOVE CLOSER", detail: "Shoulder to shoulder" },
     { kind: "direction", heading: "EVERYONE", primary: "FREEZE", detail: "Hold your position" },
     { kind: "direction", heading: "EVERYONE", primary: "EYES ON CAMERA", detail: "Big smiles" },
@@ -87,17 +83,18 @@ export function buildCommandScript(ctx: CommandContext): string[] {
   const spanByGroup = new Map(ctx.spans.map((s) => [s.groupId, s]));
   const commands: string[] = [];
 
-  if (ctx.teacherCount > 0) {
-    if (ctx.teacherLayout === "front-seated") {
-      commands.push("Teachers please take your seats in the front row.");
-      commands.push("Teachers please remain seated.");
-    } else if (ctx.teacherLayout === "front-standing") {
-      commands.push("Teachers please stand in the centre of Row 1.");
-    } else {
+  if (ctx.totalTeachers > 0 && ctx.teacherRows.length > 0) {
+    const [front, ...overflow] = ctx.teacherRows;
+    commands.push(
+      `Teachers please take the front row. Principal in the centre.`,
+    );
+    for (const r of overflow) {
       commands.push(
-        `Seated teachers to the front row. Standing teachers to the centre of Row ${ctx.standingRowNumber}.`,
+        `Remaining ${r.count} teachers to Row ${r.rowNumber}, spread out between the students.`,
       );
-      commands.push("Seated teachers please remain seated.");
+    }
+    if (front.count > 0) {
+      commands.push("Front row please be seated.");
     }
   }
 
@@ -109,13 +106,13 @@ export function buildCommandScript(ctx: CommandContext): string[] {
     const span = spanByGroup.get(group.id);
     if (span && span.fromRow > 0) {
       commands.push(
-        `Queue ${letter}, fill ${formatRowRange(span.fromRow, span.toRow)}.`,
+        `Queue ${letter}, fill ${formatRowRange(span.fromRow, span.toRow)}. Tallest leads.`,
       );
     }
   }
 
   commands.push(
-    "Fill from centre.",
+    "Fill left of centre first, then right. Tallest in the middle.",
     "Move closer.",
     "Check your spacing.",
     "Freeze.",

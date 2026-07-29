@@ -24,11 +24,12 @@ npm run build    # production build
 
 | Area | What it does |
 | --- | --- |
-| **Session Setup** | School, counts, stage width, shoulder width, rows, teacher layout (front seated / front standing / mixed), photo mode (single / multi-shot stitching). |
-| **Row Calculator** | Front row always odd, rows alternate odd/even, sizes balanced with the back fullest, never exceeds stage capacity. Recalculates instantly. |
+| **Session Setup** | School, counts, stage width, shoulder width, rows, photo mode (single / multi-shot stitching). |
+| **Row Calculator** | Front row always odd, second always even, alternating back; sizes balanced with the back fullest; never exceeds stage capacity. Recalculates instantly. |
 | **Height Zones / Queues** | Zones are aligned to row boundaries: each queue holds exactly its row's student count, so a queue empties into its row and the row comes out full — no mid-queue splits, and miscounts surface immediately. Choose up to 5 / 7 / 9 zones; fewer zones than rows merge adjacent rows per queue. |
-| **Teacher Placement** | Principal centred, senior staff nearest centre, others outward symmetrically. Editable by drag-and-drop on the stage view. |
-| **Visual Stage Layout** | Front view of the finished photograph: straight rows on risers, back row on top, seated teachers at the bottom (blue = teachers, grey = students, darker = taller). Tap for row/seat/zone, drag to swap seats. |
+| **Teacher Placement** | Set rule: teachers always take the front row (principal centred, seniors nearest centre); overflow spills to Row 2, Row 3, … spread evenly *between* students. |
+| **Within-row taper** | Set rule: tallest in the middle of every row, tapering to the shortest at the sides. Queues stay single-file: tallest leads, fill left of centre outward, then right of centre outward — nobody is split off once queued. |
+| **Visual Stage Layout** | Glanceable snapshot that fits a phone screen: one proportional band per row with the head-count printed on it; blue segments show exactly where teachers are vs students. |
 | **Queue Planner** | One printable sign per queue: Queue A → Row 8 → 38 students (Tallest), etc. |
 | **Row Labels** | Huge printable labels (ROW 8 / Tallest). Export via print-to-PDF. |
 | **Operation Mode** | Full-screen "NOW CALL QUEUE A → fill Row 8" steps with giant Next/Back buttons; helpers just follow the screen. |
@@ -45,7 +46,7 @@ src/
   lib/engine/        Pure calculation engine (no React, fully unit tested)
     rowCalculator    Row sizes, parity rules, capacity checks
     heightGroups     Row-aligned height zones (zone = whole rows, exact counts)
-    teacherPlacement Roster, seated/standing split, centre-out seating
+    teacherPlacement Roster, front-row-first placement, interspersed overflow
     stitchPlanner    Multi-shot photo grouping with overlap
     queuePlanner     Queue signs from zones + row spans
     commands         Operation steps + spoken command script

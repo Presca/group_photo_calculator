@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   applySeatSwaps,
+  centreLeftThenRightOrder,
   DEFAULT_CONFIG,
   generateLayout,
 } from "../layoutEngine";
 import type { SessionConfig } from "../types";
 
+// 280 students + 20 teachers = 300 people in 8 rows of ≤40:
+// row sizes [37,36,37,36,39,38,39,38] front-to-back.
 const baseConfig: SessionConfig = {
   ...DEFAULT_CONFIG,
   schoolName: "Test High",
-  totalStudents: 300,
+  totalStudents: 280,
   totalTeachers: 20,
   stageWidthM: 18,
   shoulderWidthM: 0.45,
@@ -20,73 +23,74 @@ describe("generateLayout", () => {
   it("seats every student and teacher exactly once", () => {
     const layout = generateLayout(baseConfig);
     const seats = layout.seatRows.flatMap((r) => r.seats);
-    const students = seats.filter((s) => s.occupant.kind === "student");
-    const teachers = seats.filter((s) => s.occupant.kind === "teacher");
-    expect(students).toHaveLength(300);
-    expect(teachers).toHaveLength(20);
+    expect(seats.filter((s) => s.occupant.kind === "student")).toHaveLength(280);
+    expect(seats.filter((s) => s.occupant.kind === "teacher")).toHaveLength(20);
   });
 
-  it("puts the principal in the centre of the seated row", () => {
+  it("always puts teachers in the front row, principal mid-row", () => {
     const layout = generateLayout(baseConfig);
-    const seatedRow = layout.seatRows.find((r) => r.kind === "seated");
-    expect(seatedRow).toBeDefined();
-    const principal = seatedRow!.seats.find(
+    expect(layout.teachers.every((t) => t.rowNumber === 1)).toBe(true);
+    expect(layout.teacherRows).toEqual([{ rowNumber: 1, count: 20 }]);
+    const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
+    const principal = row1.seats.find(
       (s) => s.occupant.role === "principal",
-    );
-    expect(principal).toBeDefined();
-    expect(principal!.seatNumber).toBe(Math.ceil(20 / 2));
+    )!;
+    expect(
+      Math.abs(principal.seatNumber - Math.ceil(row1.seats.length / 2)),
+    ).toBeLessThanOrEqual(1);
+    // Students flank the teacher block at both edges of the front row.
+    expect(row1.seats[0].occupant.kind).toBe("student");
+    expect(row1.seats[row1.seats.length - 1].occupant.kind).toBe("student");
   });
 
-  it("stands teachers in the centre of row 1 for front-standing layout", () => {
+  it("overflows teachers to the next row, interspersed between students", () => {
     const layout = generateLayout({
       ...baseConfig,
-      teacherLayout: "front-standing",
+      totalStudents: 240,
+      totalTeachers: 60,
     });
-    expect(layout.seatRows.find((r) => r.kind === "seated")).toBeUndefined();
     const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
-    const teacherSeats = row1.seats.filter(
-      (s) => s.occupant.kind === "teacher",
-    );
-    expect(teacherSeats).toHaveLength(20);
-    const principal = teacherSeats.find((s) => s.occupant.role === "principal")!;
-    expect(principal.seatNumber).toBe(Math.ceil(row1.seats.length / 2));
+    expect(row1.seats.every((s) => s.occupant.kind === "teacher")).toBe(true);
+    expect(layout.teacherRows).toEqual([
+      { rowNumber: 1, count: 37 },
+      { rowNumber: 2, count: 23 },
+    ]);
+    const row2 = layout.seatRows.find((r) => r.rowNumber === 2)!;
+    const kinds = row2.seats.map((s) => s.occupant.kind);
+    expect(kinds.filter((k) => k === "teacher")).toHaveLength(23);
+    expect(kinds.filter((k) => k === "student")).toHaveLength(13);
+    // Interspersed: the row must not start with a solid teacher block.
+    expect(kinds.slice(0, 2)).toContain("student");
   });
 
-  it("builds one queue per row, each holding exactly its row's students", () => {
+  it("builds one queue per row of students, with exact counts", () => {
     const layout = generateLayout(baseConfig);
-    // 9 zones requested but only 8 rows → 8 queues.
     expect(layout.queues).toHaveLength(8);
     const rowByNumber = new Map(
       layout.rowsResult.rows.map((r) => [r.rowNumber, r]),
     );
     expect(layout.queues[0].letter).toBe("A");
     expect(layout.queues[0].fromRow).toBe(8);
-    expect(layout.queues[0].toRow).toBe(8);
-    // Front-seated teachers, so every standing seat is a student seat.
     expect(layout.queues[0].count).toBe(rowByNumber.get(8)!.size);
-    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(300);
+    // Front queue excludes the 20 teacher seats.
+    const front = layout.queues[layout.queues.length - 1];
+    expect(front.toRow).toBe(1);
+    expect(front.count).toBe(rowByNumber.get(1)!.size - 20);
+    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(280);
   });
 
   it("merges adjacent rows into a queue when fewer zones are requested", () => {
     const layout = generateLayout({ ...baseConfig, heightGroupCount: 5 });
     expect(layout.queues).toHaveLength(5);
-    // 8 rows into 5 queues: extra rows go to the back queues.
     expect(layout.queues[0].fromRow).toBe(8);
     expect(layout.queues[0].toRow).toBe(7);
-    expect(layout.queues[4].fromRow).toBe(1);
-    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(300);
+    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(280);
   });
 
-  it("excludes standing teachers from queue counts", () => {
-    const layout = generateLayout({
-      ...baseConfig,
-      teacherLayout: "front-standing",
-    });
-    const row1 = layout.rowsResult.rows.find((r) => r.rowNumber === 1)!;
-    const frontQueue = layout.queues[layout.queues.length - 1];
-    expect(frontQueue.toRow).toBe(1);
-    expect(frontQueue.count).toBe(row1.size - 20);
-    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(300);
+  it("keeps the front row odd and the second even (set rule 3)", () => {
+    const layout = generateLayout(baseConfig);
+    expect(layout.rowsResult.rows[0].size % 2).toBe(1);
+    expect(layout.rowsResult.rows[1].size % 2).toBe(0);
   });
 
   it("produces a stitch plan only in stitch mode", () => {
@@ -109,6 +113,20 @@ describe("generateLayout", () => {
   });
 });
 
+describe("centreLeftThenRightOrder", () => {
+  it("fills left of centre outward, then right of centre outward", () => {
+    // Row of 6, all seats free: centre is seat 3.
+    expect(centreLeftThenRightOrder([1, 2, 3, 4, 5, 6], 6)).toEqual([
+      3, 2, 1, 4, 5, 6,
+    ]);
+  });
+
+  it("works around occupied teacher seats", () => {
+    // Row of 7 where seats 3-5 are teachers.
+    expect(centreLeftThenRightOrder([1, 2, 6, 7], 7)).toEqual([2, 1, 6, 7]);
+  });
+});
+
 describe("applySeatSwaps", () => {
   it("swaps two occupants and ignores stale swaps", () => {
     const layout = generateLayout(baseConfig);
@@ -117,7 +135,6 @@ describe("applySeatSwaps", () => {
         a: { rowNumber: 1, seatNumber: 1 },
         b: { rowNumber: 8, seatNumber: 1 },
       },
-      // Stale swap referencing a seat that does not exist.
       { a: { rowNumber: 99, seatNumber: 1 }, b: { rowNumber: 1, seatNumber: 2 } },
     ]);
     const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
@@ -126,7 +143,6 @@ describe("applySeatSwaps", () => {
     const newRow8 = swapped.find((r) => r.rowNumber === 8)!;
     expect(newRow1.seats[0].occupant).toEqual(row8.seats[0].occupant);
     expect(newRow8.seats[0].occupant).toEqual(row1.seats[0].occupant);
-    // Original untouched (pure function).
     expect(layout.seatRows.find((r) => r.rowNumber === 1)!.seats[0].occupant)
       .toEqual(row1.seats[0].occupant);
   });

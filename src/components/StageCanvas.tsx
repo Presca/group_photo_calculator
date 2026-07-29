@@ -23,7 +23,8 @@ const PAD = 14;
 
 /**
  * Front view of the finished photograph: straight rows on risers, the
- * back (tallest) row at the top, the seated teacher row at the bottom —
+ * back (tallest) row at the top, the teacher-filled front row at the
+ * bottom —
  * exactly what the camera will see. Blue = teachers, grey = students
  * (darker grey = taller zone). Tap a seat for details, drag one seat
  * onto another to swap them.
@@ -311,7 +312,7 @@ function seatFill(seat: Seat): string {
 }
 
 function seatDescription(seat: Seat): string {
-  const where = seat.rowNumber === 0 ? "Seated row" : `Row ${seat.rowNumber}`;
+  const where = `Row ${seat.rowNumber}`;
   if (seat.occupant.kind === "teacher") {
     return `${where} · Seat ${seat.seatNumber} · ${seat.occupant.label}`;
   }
@@ -321,13 +322,8 @@ function seatDescription(seat: Seat): string {
 }
 
 function buildGeometry(seatRows: SeatRow[]) {
-  // Photo order: back row at the top, then forward, seated row last.
-  const ordered = [
-    ...seatRows
-      .filter((r) => r.kind === "standing")
-      .sort((a, b) => b.rowNumber - a.rowNumber),
-    ...seatRows.filter((r) => r.kind === "seated"),
-  ];
+  // Photo order: back row at the top, front row at the bottom.
+  const ordered = [...seatRows].sort((a, b) => b.rowNumber - a.rowNumber);
 
   const maxSeats = Math.max(1, ...ordered.map((r) => r.seats.length));
   const width = LABEL_W + maxSeats * SEAT_SPACING + PAD * 2;
@@ -344,9 +340,8 @@ function buildGeometry(seatRows: SeatRow[]) {
     bands.push({
       key: `band-${row.rowNumber}`,
       y,
-      label: row.kind === "seated" ? "Seated" : `Row ${row.rowNumber}`,
-      fill:
-        row.kind === "seated" ? "#eff6ff" : idx % 2 === 0 ? "#f8fafc" : "#ffffff",
+      label: `Row ${row.rowNumber}`,
+      fill: idx % 2 === 0 ? "#f8fafc" : "#ffffff",
     });
 
     row.seats.forEach((seat, i) => {

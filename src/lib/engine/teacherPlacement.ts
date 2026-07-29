@@ -1,4 +1,4 @@
-import type { TeacherLayout, TeacherPlan, TeacherRole } from "./types";
+import type { TeacherPlan, TeacherRole } from "./types";
 
 export interface TeacherRosterEntry {
   id: string;
@@ -33,46 +33,6 @@ export function generateTeacherRoster(count: number): TeacherRosterEntry[] {
   return roster;
 }
 
-export interface TeacherSplit {
-  seatedCount: number;
-  standingCount: number;
-  /** Standing row the standing teachers join (0 when none). */
-  standingRowNumber: number;
-}
-
-/**
- * Decide how many teachers sit in the front seated row versus stand
- * within the student rows, based on the chosen layout.
- */
-export function splitTeachers(
-  layout: TeacherLayout,
-  teacherCount: number,
-  standingRowCount: number,
-): TeacherSplit {
-  if (teacherCount <= 0) {
-    return { seatedCount: 0, standingCount: 0, standingRowNumber: 0 };
-  }
-  switch (layout) {
-    case "front-seated":
-      return { seatedCount: teacherCount, standingCount: 0, standingRowNumber: 0 };
-    case "front-standing":
-      return {
-        seatedCount: 0,
-        standingCount: teacherCount,
-        standingRowNumber: 1,
-      };
-    case "mixed": {
-      const seatedCount = Math.ceil(teacherCount / 2);
-      return {
-        seatedCount,
-        standingCount: teacherCount - seatedCount,
-        // Middle of the standing rows.
-        standingRowNumber: Math.max(1, Math.ceil(standingRowCount / 2)),
-      };
-    }
-  }
-}
-
 /**
  * Seat numbers of a row of `size`, ordered centre-out: centre seat
  * first, then alternating right/left. The principal takes the first
@@ -90,38 +50,76 @@ export function centreOutSeatOrder(size: number): number[] {
 }
 
 /**
- * Place teachers into their rows. Seated teachers occupy row 0 (a
- * seated row in front of row 1); standing teachers take the centre
- * seats of their standing row.
+ * Evenly spaced seat numbers for interspersing k teachers among a row
+ * of n seats, so overflow teachers stand *between* students rather
+ * than clumping together.
  */
-export function placeTeachers(
+export function interspersedSeatOrder(n: number, k: number): number[] {
+  if (k >= n) return Array.from({ length: n }, (_, i) => i + 1);
+  const used = new Set<number>();
+  const out: number[] = [];
+  for (let j = 1; j <= k; j++) {
+    let pos = Math.round((j * (n + 1)) / (k + 1));
+    pos = Math.min(n, Math.max(1, pos));
+    while (used.has(pos) && pos < n) pos++;
+    while (used.has(pos) && pos > 1) pos--;
+    used.add(pos);
+    out.push(pos);
+  }
+  return out;
+}
+
+export interface TeacherAssignment {
+  plans: TeacherPlan[];
+  /** rowNumber → teacher seat numbers, ascending. */
+  seatsByRow: Map<number, number[]>;
+  /** Teachers that did not fit on the stage at all. */
+  unplaced: number;
+}
+
+/**
+ * Set rule: teachers always take the front row, as a centred block
+ * with the principal mid-row and seniors nearest the centre. Overflow
+ * spills to the second row — spread evenly between students — then the
+ * third, and so on.
+ */
+export function assignTeachersFrontFirst(
+  rowSizes: { rowNumber: number; size: number }[],
   roster: TeacherRosterEntry[],
-  split: TeacherSplit,
-  standingRowSize: number,
-): TeacherPlan[] {
+): TeacherAssignment {
+  const frontFirst = [...rowSizes].sort((a, b) => a.rowNumber - b.rowNumber);
   const plans: TeacherPlan[] = [];
+  const seatsByRow = new Map<number, number[]>();
 
-  const seated = roster.slice(0, split.seatedCount);
-  const seatedOrder = centreOutSeatOrder(split.seatedCount);
-  seated.forEach((t, i) => {
-    plans.push({
-      ...t,
-      placement: "seated",
-      rowNumber: 0,
-      seatNumber: seatedOrder[i],
-    });
-  });
+  let placed = 0;
+  for (let r = 0; r < frontFirst.length && placed < roster.length; r++) {
+    const row = frontFirst[r];
+    const k = Math.min(roster.length - placed, row.size);
+    if (k <= 0) continue;
 
-  const standing = roster.slice(split.seatedCount);
-  const standingOrder = centreOutSeatOrder(standingRowSize);
-  standing.forEach((t, i) => {
-    plans.push({
-      ...t,
-      placement: "standing",
-      rowNumber: split.standingRowNumber,
-      seatNumber: standingOrder[i] ?? i + 1,
-    });
-  });
+    let seats: number[];
+    if (r === 0) {
+      // Front row: centred block, centre-out so roster order (principal,
+      // seniors, …) radiates from the middle of the row.
+      const blockStart = Math.floor((row.size - k) / 2);
+      seats = centreOutSeatOrder(k).map((s) => s + blockStart);
+    } else {
+      seats = interspersedSeatOrder(row.size, k);
+    }
 
-  return plans;
+    for (let i = 0; i < k; i++) {
+      plans.push({
+        ...roster[placed + i],
+        rowNumber: row.rowNumber,
+        seatNumber: seats[i],
+      });
+    }
+    seatsByRow.set(
+      row.rowNumber,
+      [...seats].sort((a, b) => a - b),
+    );
+    placed += k;
+  }
+
+  return { plans, seatsByRow, unplaced: roster.length - placed };
 }

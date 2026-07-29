@@ -162,20 +162,17 @@ function LayoutSheet({
               <td className="py-2 font-extrabold">Row {row.rowNumber}</td>
               <td className="py-2 tabular-nums">{row.size}</td>
               <td className="py-2">
-                {layout.rowSlices
-                  .filter((s) => s.rowNumber === row.rowNumber)
-                  .map((s) => `${s.groupId} (${s.count})`)
-                  .join(", ") || "—"}
+                {[
+                  ...layout.rowSlices
+                    .filter((s) => s.rowNumber === row.rowNumber)
+                    .map((s) => `${s.groupId} (${s.count})`),
+                  ...layout.teacherRows
+                    .filter((t) => t.rowNumber === row.rowNumber)
+                    .map((t) => `${t.count} teachers`),
+                ].join(", ") || "—"}
               </td>
             </tr>
           ))}
-          {layout.seatedTeacherCount > 0 && (
-            <tr>
-              <td className="py-2 font-extrabold">Seated</td>
-              <td className="py-2 tabular-nums">{layout.seatedTeacherCount}</td>
-              <td className="py-2">Teachers</td>
-            </tr>
-          )}
         </tbody>
       </table>
     </Sheet>
@@ -183,24 +180,22 @@ function LayoutSheet({
 }
 
 function TeacherGuide({ layout }: { layout: StageLayout }) {
-  const seated = layout.teachers.filter((t) => t.placement === "seated");
-  const standing = layout.teachers.filter((t) => t.placement === "standing");
   return (
     <Sheet title="Teacher Guide" layout={layout}>
       <p className="mb-4 text-lg font-semibold text-slate-600">
-        Principal centred. Senior staff nearest the centre. Everyone else fills
-        outward symmetrically.
+        Teachers take the front row: principal in the centre, senior staff
+        nearest the centre. Overflow teachers go to the next row, spread
+        evenly between the students.
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
-        {[
-          { title: "Seated row (front)", list: seated },
-          {
-            title: standing.length
-              ? `Standing — Row ${standing[0].rowNumber}`
-              : "",
-            list: standing,
-          },
-        ]
+        {layout.teacherRows
+          .map((r, i) => ({
+            title:
+              i === 0
+                ? `Front row — Row ${r.rowNumber} (${r.count})`
+                : `Between students — Row ${r.rowNumber} (${r.count})`,
+            list: layout.teachers.filter((t) => t.rowNumber === r.rowNumber),
+          }))
           .filter((g) => g.list.length > 0)
           .map((g) => (
             <div key={g.title}>
@@ -254,7 +249,10 @@ function QueueGuide({ layout }: { layout: StageLayout }) {
           <div className="mt-8 rounded-2xl bg-slate-900 px-8 py-4 text-4xl font-black text-white">
             {formatRowRange(queue.fromRow, queue.toRow)}
           </div>
-          <div className="mt-6 text-xl font-bold text-slate-400">
+          <div className="mt-6 rounded-2xl bg-slate-100 px-6 py-3 text-2xl font-extrabold text-slate-700">
+            Tallest first · fill LEFT of centre, then RIGHT
+          </div>
+          <div className="mt-4 text-xl font-bold text-slate-400">
             {queue.count} students ·{" "}
             {layout.config.schoolName || "Group photo session"}
           </div>
@@ -332,9 +330,9 @@ const CHECKLIST = [
   "Tape the row labels to the stage edge / platform steps.",
   "Brief the helping teachers: follow the Operate screen.",
   "Sort students into height zones at the queue signs.",
-  "Seat / position teachers first (principal centred).",
+  "Teachers to the front row first (principal centred); overflow teachers spread between students in the next row.",
   "Call zones from the Operate screen, tallest first.",
-  "Fill each row from the centre outward.",
+  "Each row: tallest leads, fill left of centre outward, then right of centre outward.",
   "Final checks: spacing, faces visible, eyes on camera.",
   "For stitched photos: shoot each group with the planned overlap rows.",
 ];

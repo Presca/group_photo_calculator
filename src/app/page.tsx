@@ -20,16 +20,12 @@ export default function SetupPage() {
   if (!state.hydrated) return null;
 
   const maxPerRow = maxPeoplePerRow(config.stageWidthM, config.shoulderWidthM);
-  const standingTeachers =
-    config.teacherLayout === "front-standing"
-      ? config.totalTeachers
-      : config.teacherLayout === "mixed"
-        ? Math.floor(config.totalTeachers / 2)
-        : 0;
-  const standingPeople = config.totalStudents + standingTeachers;
+  // Teachers occupy row seats too (front row first), so everyone
+  // counts towards stage capacity.
+  const totalPeople = config.totalStudents + config.totalTeachers;
   const capacity = maxPerRow * config.standingRows;
-  const fits = standingPeople <= capacity;
-  const rowsNeeded = maxPerRow > 0 ? Math.ceil(standingPeople / maxPerRow) : 0;
+  const fits = totalPeople <= capacity;
+  const rowsNeeded = maxPerRow > 0 ? Math.ceil(totalPeople / maxPerRow) : 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
@@ -83,24 +79,13 @@ export default function SetupPage() {
               onChange={(v) => patchConfig({ shoulderWidthM: v })}
             />
             <NumberStepper
-              label="Standing Rows"
+              label="Rows (incl. front row)"
               value={config.standingRows}
               min={1}
               max={12}
               onChange={(v) => patchConfig({ standingRows: Math.round(v) })}
             />
           </div>
-
-          <SegmentedControl
-            label="Teacher Layout"
-            value={config.teacherLayout}
-            options={[
-              { value: "front-seated", label: "Front seated" },
-              { value: "front-standing", label: "Front standing" },
-              { value: "mixed", label: "Mixed" },
-            ]}
-            onChange={(v) => patchConfig({ teacherLayout: v })}
-          />
 
           <SegmentedControl
             label="Photo Mode"
@@ -155,7 +140,7 @@ export default function SetupPage() {
               value={capacity}
               tone={fits ? "good" : "bad"}
             />
-            <StatChip label="People standing" value={standingPeople} />
+            <StatChip label="Total people" value={totalPeople} />
             <StatChip
               label="Rows needed"
               value={rowsNeeded}
@@ -169,7 +154,7 @@ export default function SetupPage() {
                 This group does not fit on the stage.
               </p>
               <p className="mt-1 text-amber-800">
-                {standingPeople - capacity} people over capacity. Choose a fix:
+                {totalPeople - capacity} people over capacity. Choose a fix:
               </p>
               <div className="mt-3 grid gap-2">
                 <BigButton
@@ -199,12 +184,19 @@ export default function SetupPage() {
         <SectionCard title="At a glance">
           <ul className="space-y-2 text-lg text-slate-700">
             <li>
-              <strong>{layout.rowsResult.rows.length}</strong> standing rows
-              planned
+              <strong>{layout.rowsResult.rows.length}</strong> rows planned
             </li>
             <li>
-              <strong>{layout.seatedTeacherCount}</strong> teachers seated,{" "}
-              <strong>{layout.standingTeacherCount}</strong> standing
+              Teachers:{" "}
+              {layout.teacherRows.length === 0
+                ? "none"
+                : layout.teacherRows
+                    .map((r, i) =>
+                      i === 0
+                        ? `${r.count} in the front row`
+                        : `${r.count} between students in Row ${r.rowNumber}`,
+                    )
+                    .join(", ")}
             </li>
             <li>
               <strong>{layout.groups.length}</strong> height zones,{" "}

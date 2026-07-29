@@ -8,19 +8,19 @@ import { planQueues } from "./queuePlanner";
 import { calculateRows, maxPeoplePerRow } from "./rowCalculator";
 import { planStitch } from "./stitchPlanner";
 import {
-  centreOutSeatOrder,
+  assignTeachersFrontFirst,
   generateTeacherRoster,
-  placeTeachers,
-  splitTeachers,
+  type TeacherAssignment,
 } from "./teacherPlacement";
 import type {
   RowLabel,
+  RowPlan,
   Seat,
   SeatRow,
   SeatSwap,
   SessionConfig,
   StageLayout,
-  TeacherPlan,
+  TeacherRowSummary,
 } from "./types";
 
 export const DEFAULT_CONFIG: SessionConfig = {
@@ -29,8 +29,7 @@ export const DEFAULT_CONFIG: SessionConfig = {
   totalTeachers: 30,
   stageWidthM: 18,
   shoulderWidthM: 0.45,
-  standingRows: 8,
-  teacherLayout: "front-seated",
+  standingRows: 9,
   photoMode: "single",
   heightGroupCount: 9,
   stitchRowsPerPhoto: 3,
@@ -42,82 +41,70 @@ export const DEFAULT_CONFIG: SessionConfig = {
  * Pure function: same config in, same plan out — which is what keeps
  * live adjustments stable (small input changes produce small plan
  * changes rather than reshuffles).
+ *
+ * Set rules encoded here:
+ * 1. Teachers always take the front row (principal centred, seniors
+ *    nearest the centre). Overflow spills to Row 2, Row 3, … spread
+ *    evenly between students.
+ * 2. Within every row the tallest stand in the middle, tapering to the
+ *    shortest at the sides. Students file in from one queue, tallest
+ *    first: fill left of centre outward, then right of centre outward
+ *    — nobody is split off once queued.
+ * 3. The front row is always odd, the second even, alternating back.
  */
 export function generateLayout(config: SessionConfig): StageLayout {
   const warnings: string[] = [];
   const suggestions: string[] = [];
 
   const maxPerRow = maxPeoplePerRow(config.stageWidthM, config.shoulderWidthM);
-  const split = splitTeachers(
-    config.teacherLayout,
-    config.totalTeachers,
-    config.standingRows,
-  );
 
-  // Standing teachers occupy standing-row seats, so they count towards
-  // stage capacity; seated teachers get their own row of chairs in front.
-  const standingPeople = config.totalStudents + split.standingCount;
+  // Teachers occupy row seats too, so everyone counts towards capacity.
+  const totalPeople = config.totalStudents + config.totalTeachers;
   const rowsResult = calculateRows({
-    peopleCount: standingPeople,
+    peopleCount: totalPeople,
     rowCount: config.standingRows,
     maxPerRow,
   });
   warnings.push(...rowsResult.warnings);
   suggestions.push(...rowsResult.suggestions);
 
-  const rowByNumber = new Map(rowsResult.rows.map((r) => [r.rowNumber, r]));
-
-  // Teachers standing in a row take its centre seats.
-  const teachersPerRow = new Map<number, number>();
-  let standingRowNumber = split.standingRowNumber;
-  let standingCount = split.standingCount;
-  if (standingCount > 0) {
-    if (!rowByNumber.has(standingRowNumber)) {
-      standingRowNumber = Math.max(
-        1,
-        Math.min(standingRowNumber, rowsResult.rows.length),
-      );
-    }
-    const row = rowByNumber.get(standingRowNumber);
-    if (row) {
-      const inRow = Math.min(standingCount, row.size);
-      teachersPerRow.set(standingRowNumber, inRow);
-      if (inRow < standingCount) {
-        warnings.push(
-          `Row ${standingRowNumber} cannot hold all standing teachers; ${standingCount - inRow} moved to the row behind.`,
-        );
-        const behind = rowByNumber.get(standingRowNumber + 1);
-        if (behind) {
-          teachersPerRow.set(
-            standingRowNumber + 1,
-            Math.min(standingCount - inRow, behind.size),
-          );
-        }
-      }
-    }
+  const roster = generateTeacherRoster(config.totalTeachers);
+  const assignment = assignTeachersFrontFirst(rowsResult.rows, roster);
+  if (assignment.unplaced > 0) {
+    warnings.push(
+      `${assignment.unplaced} teacher${assignment.unplaced === 1 ? "" : "s"} could not be placed on the stage.`,
+    );
   }
 
-  // Height zones are aligned to row boundaries so each queue empties
-  // into exactly its row(s). Zones cover students only.
+  const teacherRows: TeacherRowSummary[] = [...assignment.seatsByRow.entries()]
+    .map(([rowNumber, seats]) => ({ rowNumber, count: seats.length }))
+    .sort((a, b) => a.rowNumber - b.rowNumber);
+
+  // Height zones cover students only; rows fully occupied by teachers
+  // (usually the front row) are skipped automatically.
   const capacities: RowStudentCapacity[] = rowsResult.rows.map((r) => ({
     rowNumber: r.rowNumber,
-    studentCapacity: r.size - (teachersPerRow.get(r.rowNumber) ?? 0),
+    studentCapacity:
+      r.size - (assignment.seatsByRow.get(r.rowNumber)?.length ?? 0),
   }));
-  const assignment = buildRowAlignedZones(capacities, config.heightGroupCount);
-  const groups = assignment.groups;
+  const zoneAssignment = buildRowAlignedZones(
+    capacities,
+    config.heightGroupCount,
+  );
+  const groups = zoneAssignment.groups;
 
-  const roster = generateTeacherRoster(config.totalTeachers);
-  const standingRowSize = rowByNumber.get(standingRowNumber)?.size ?? 0;
-  const teachers = placeTeachers(roster, split, standingRowSize);
+  const seatRows = buildSeatRows(
+    rowsResult.rows,
+    assignment,
+    zoneAssignment.slices,
+  );
 
-  const seatRows = buildSeatRows(rowsResult.rows, teachers, assignment.slices);
-
-  const queues = planQueues(groups, assignment.spans);
+  const queues = planQueues(groups, zoneAssignment.spans);
 
   const rowLabels: RowLabel[] = [...rowsResult.rows]
     .sort((a, b) => b.rowNumber - a.rowNumber)
     .map((row) => {
-      const slices = assignment.slices.filter(
+      const slices = zoneAssignment.slices.filter(
         (s) => s.rowNumber === row.rowNumber,
       );
       const dominant = slices.reduce(
@@ -128,11 +115,8 @@ export function generateLayout(config: SessionConfig): StageLayout {
       return {
         rowNumber: row.rowNumber,
         descriptor: dominantGroup
-          ? heightDescriptor(
-              dominantGroup.indexFromTallest,
-              config.heightGroupCount,
-            )
-          : "—",
+          ? heightDescriptor(dominantGroup.indexFromTallest, groups.length)
+          : "Teachers",
         groupIds: slices.map((s) => s.groupId),
         size: row.size,
       };
@@ -149,10 +133,9 @@ export function generateLayout(config: SessionConfig): StageLayout {
 
   const commandCtx = {
     groups,
-    spans: assignment.spans,
-    teacherLayout: config.teacherLayout,
-    teacherCount: config.totalTeachers,
-    standingRowNumber,
+    spans: zoneAssignment.spans,
+    teacherRows,
+    totalTeachers: config.totalTeachers,
   };
 
   return {
@@ -160,11 +143,10 @@ export function generateLayout(config: SessionConfig): StageLayout {
     maxPerRow,
     rowsResult,
     groups,
-    groupSpans: assignment.spans,
-    rowSlices: assignment.slices,
-    teachers,
-    seatedTeacherCount: split.seatedCount,
-    standingTeacherCount: split.standingCount,
+    groupSpans: zoneAssignment.spans,
+    rowSlices: zoneAssignment.slices,
+    teachers: assignment.plans,
+    teacherRows,
     seatRows,
     queues,
     rowLabels,
@@ -176,93 +158,88 @@ export function generateLayout(config: SessionConfig): StageLayout {
   };
 }
 
+/**
+ * Seat-filling order for students in a row: the queue arrives tallest
+ * first and fills the left half from the centre outward, then the
+ * right half from the centre outward. One line, one direction change,
+ * and the row tapers tall-centre → short-edges on both sides.
+ */
+export function centreLeftThenRightOrder(
+  availableSeats: number[],
+  rowSize: number,
+): number[] {
+  const centre = Math.ceil(rowSize / 2);
+  const left = availableSeats
+    .filter((s) => s <= centre)
+    .sort((a, b) => b - a);
+  const right = availableSeats
+    .filter((s) => s > centre)
+    .sort((a, b) => a - b);
+  return [...left, ...right];
+}
+
 function buildSeatRows(
-  rows: StageLayout["rowsResult"]["rows"],
-  teachers: TeacherPlan[],
+  rows: RowPlan[],
+  assignment: TeacherAssignment,
   slices: StageLayout["rowSlices"],
 ): SeatRow[] {
-  const seatRows: SeatRow[] = [];
-
-  const seatedTeachers = teachers.filter((t) => t.placement === "seated");
-  if (seatedTeachers.length > 0) {
-    const seats: Seat[] = [...seatedTeachers]
-      .sort((a, b) => a.seatNumber - b.seatNumber)
-      .map((t) => ({
-        rowNumber: 0,
-        seatNumber: t.seatNumber,
-        occupant: {
-          kind: "teacher" as const,
-          label: t.label,
-          teacherId: t.id,
-          role: t.role,
-        },
-      }));
-    seatRows.push({ rowNumber: 0, kind: "seated", seats });
+  const teachersBySeat = new Map<string, (typeof assignment.plans)[number]>();
+  for (const t of assignment.plans) {
+    teachersBySeat.set(`${t.rowNumber}:${t.seatNumber}`, t);
   }
 
-  const standingTeachersByRow = new Map<number, TeacherPlan[]>();
-  for (const t of teachers) {
-    if (t.placement !== "standing") continue;
-    const list = standingTeachersByRow.get(t.rowNumber) ?? [];
-    list.push(t);
-    standingTeachersByRow.set(t.rowNumber, list);
-  }
-
-  for (const row of rows) {
+  return rows.map((row) => {
     const seats: (Seat | null)[] = new Array(row.size).fill(null);
 
-    // Standing teachers take centre seats first.
-    const rowTeachers = standingTeachersByRow.get(row.rowNumber) ?? [];
-    const centreOrder = centreOutSeatOrder(row.size);
-    rowTeachers.forEach((t, i) => {
-      const seatNumber = centreOrder[i];
-      if (seatNumber === undefined) return;
-      seats[seatNumber - 1] = {
-        rowNumber: row.rowNumber,
-        seatNumber,
-        occupant: {
-          kind: "teacher",
-          label: t.label,
-          teacherId: t.id,
-          role: t.role,
-        },
-      };
-    });
+    for (let seatNumber = 1; seatNumber <= row.size; seatNumber++) {
+      const teacher = teachersBySeat.get(`${row.rowNumber}:${seatNumber}`);
+      if (teacher) {
+        seats[seatNumber - 1] = {
+          rowNumber: row.rowNumber,
+          seatNumber,
+          occupant: {
+            kind: "teacher",
+            label: teacher.label,
+            teacherId: teacher.id,
+            role: teacher.role,
+          },
+        };
+      }
+    }
 
-    // Students fill the remaining seats left-to-right, taller groups
-    // already ordered first within the row.
+    // Students fill the remaining seats in taper order: tallest of the
+    // row's cohort nearest the centre, shortest at the edges.
+    const available: number[] = [];
+    for (let s = 1; s <= row.size; s++) {
+      if (seats[s - 1] === null) available.push(s);
+    }
+    const fillOrder = centreLeftThenRightOrder(available, row.size);
+
     const rowSlices = slices.filter((s) => s.rowNumber === row.rowNumber);
     const studentQueue: string[] = [];
     for (const slice of rowSlices) {
       for (let i = 0; i < slice.count; i++) studentQueue.push(slice.groupId);
     }
-    let q = 0;
-    for (let seatIdx = 0; seatIdx < row.size; seatIdx++) {
-      if (seats[seatIdx] !== null) continue;
-      const groupId = studentQueue[q++];
-      seats[seatIdx] = {
+
+    fillOrder.forEach((seatNumber, i) => {
+      const groupId = studentQueue[i];
+      seats[seatNumber - 1] = {
         rowNumber: row.rowNumber,
-        seatNumber: seatIdx + 1,
+        seatNumber,
         occupant: groupId
           ? { kind: "student", label: groupId, groupId }
           : { kind: "student", label: "—" },
       };
-    }
-
-    seatRows.push({
-      rowNumber: row.rowNumber,
-      kind: "standing",
-      seats: seats as Seat[],
     });
-  }
 
-  return seatRows;
+    return { rowNumber: row.rowNumber, seats: seats as Seat[] };
+  });
 }
 
 /**
- * Apply manual drag-and-drop swaps on top of a generated layout.
- * Swaps referencing seats that no longer exist are ignored, which is
- * what keeps manual edits stable across live adjustments.
+ * Apply manual swaps on top of a generated layout. Swaps referencing
+ * seats that no longer exist are ignored. Kept as the extension point
+ * for future AI-driven adjustments (e.g. face-visibility fixes).
  */
 export function applySeatSwaps(
   seatRows: SeatRow[],

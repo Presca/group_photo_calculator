@@ -24,7 +24,7 @@ export function WarningsBanner({ layout }: { layout: StageLayout }) {
                 standingRows: Math.max(
                   layout.config.standingRows,
                   Math.ceil(
-                    (layout.config.totalStudents + layout.standingTeacherCount) /
+                    (layout.config.totalStudents + layout.config.totalTeachers) /
                       Math.max(1, layout.maxPerRow),
                   ),
                 ),
@@ -48,24 +48,31 @@ export function WarningsBanner({ layout }: { layout: StageLayout }) {
 }
 
 export function TeacherPanel({ layout }: { layout: StageLayout }) {
-  const seated = layout.teachers.filter((t) => t.placement === "seated");
-  const standing = layout.teachers.filter((t) => t.placement === "standing");
+  if (layout.teacherRows.length === 0) return null;
+  const [frontRow, ...overflowRows] = layout.teacherRows;
   return (
     <SectionCard title="Teacher Placement">
-      <p className="mb-3 text-slate-600">
-        Principal centred, senior staff nearest the centre, others outward
-        symmetrically. Drag seats on the stage view to fine-tune.
+      <p className="mb-3 text-sm text-slate-600 sm:text-base">
+        Teachers always take the front row — principal in the centre, senior
+        staff nearest the centre. Overflow teachers spread out between the
+        students in the next row(s).
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
-        {seated.length > 0 && (
-          <TeacherList title={`Seated row (${seated.length})`} teachers={seated} />
-        )}
-        {standing.length > 0 && (
+        <TeacherList
+          title={`Front row · Row ${frontRow.rowNumber} (${frontRow.count})`}
+          teachers={layout.teachers.filter(
+            (t) => t.rowNumber === frontRow.rowNumber,
+          )}
+        />
+        {overflowRows.map((r) => (
           <TeacherList
-            title={`Standing · Row ${standing[0]?.rowNumber} (${standing.length})`}
-            teachers={standing}
+            key={r.rowNumber}
+            title={`Between students · Row ${r.rowNumber} (${r.count})`}
+            teachers={layout.teachers.filter(
+              (t) => t.rowNumber === r.rowNumber,
+            )}
           />
-        )}
+        ))}
       </div>
     </SectionCard>
   );

@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { StageCanvas } from "@/components/StageCanvas";
 import { StageSnapshot } from "@/components/StageSnapshot";
 import {
   LiveAdjustBar,
@@ -21,9 +19,7 @@ import { formatRowRange } from "@/lib/engine";
 import { useSession } from "@/store/SessionContext";
 
 export default function PlanPage() {
-  const { state, layout, seatRows, addSwap, clearSwaps, patchConfig } =
-    useSession();
-  const [seatView, setSeatView] = useState(false);
+  const { state, layout, patchConfig } = useSession();
 
   if (!state.hydrated) return null;
 
@@ -44,49 +40,23 @@ export default function PlanPage() {
   return (
     <>
       <div className="grid gap-4 pb-20 sm:gap-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
-              {state.config.schoolName || "Unnamed session"}
-            </h1>
-            <p className="text-sm font-semibold text-slate-500 sm:text-base">
-              {state.config.photoMode === "stitch"
-                ? "Multi-shot stitching"
-                : "Single photo"}{" "}
-              · {state.config.stageWidthM} m stage ·{" "}
-              {layout.rowsResult.rows.length} rows
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+            {state.config.schoolName || "Unnamed session"}
+          </h1>
+          <p className="text-sm font-semibold text-slate-500 sm:text-base">
+            {state.config.photoMode === "stitch"
+              ? "Multi-shot stitching"
+              : "Single photo"}{" "}
+            · {state.config.stageWidthM} m stage ·{" "}
+            {layout.rowsResult.rows.length} rows
+          </p>
         </div>
 
         <WarningsBanner layout={layout} />
 
-        <SectionCard
-          title="Stage Layout"
-          action={
-            <div className="flex items-center gap-2">
-              {seatView && state.swaps.length > 0 && (
-                <button
-                  className="min-h-10 rounded-xl px-3 text-sm font-bold text-slate-500 hover:bg-slate-100"
-                  onClick={clearSwaps}
-                >
-                  Undo swaps ({state.swaps.length})
-                </button>
-              )}
-              <button
-                className="min-h-10 rounded-xl border-2 border-slate-300 px-3 text-sm font-bold text-slate-600 active:bg-slate-100"
-                onClick={() => setSeatView((v) => !v)}
-              >
-                {seatView ? "Snapshot" : "Edit seats"}
-              </button>
-            </div>
-          }
-        >
-          {seatView ? (
-            <StageCanvas seatRows={seatRows} onSwap={(a, b) => addSwap({ a, b })} />
-          ) : (
-            <StageSnapshot layout={layout} />
-          )}
+        <SectionCard title="Stage Layout">
+          <StageSnapshot layout={layout} />
         </SectionCard>
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -117,8 +87,9 @@ export default function PlanPage() {
           }
         >
           <p className="mb-3 text-sm font-semibold text-slate-500 sm:text-base">
-            One queue per row — when a queue empties, its row is full. If they
-            don&apos;t match, a count is off.
+            One queue per row, tallest first — fill left of centre outward,
+            then right of centre outward. When a queue empties, its row is
+            full.
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {layout.queues.map((queue) => (

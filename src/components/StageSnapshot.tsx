@@ -1,95 +1,124 @@
 "use client";
 
+import { useMemo } from "react";
 import type { StageLayout } from "@/lib/engine";
 import { zoneIsDark, zoneShade } from "./StageCanvas";
+
+interface BandSegment {
+  kind: "student" | "teacher";
+  count: number;
+  color: string;
+}
 
 /**
  * Glanceable snapshot of the finished photograph, sized to fit any
  * phone screen with no scrolling: one band per row, band width
- * proportional to the head-count, with the count printed on the band.
- * Back (tallest) row at the top, seated teachers at the bottom.
+ * proportional to the head-count, the count printed on the band.
+ * Blue segments show exactly where teachers sit/stand vs students
+ * (centred block in the front row, interspersed slivers in overflow
+ * rows). Back (tallest) row at the top.
  */
 export function StageSnapshot({ layout }: { layout: StageLayout }) {
-  const rows = [...layout.rowsResult.rows].sort(
-    (a, b) => b.rowNumber - a.rowNumber,
+  const rows = useMemo(
+    () => [...layout.seatRows].sort((a, b) => b.rowNumber - a.rowNumber),
+    [layout],
   );
-  const maxSize = Math.max(
-    1,
-    ...rows.map((r) => r.size),
-    layout.seatedTeacherCount,
-  );
+  const maxSize = Math.max(1, ...rows.map((r) => r.seats.length));
   const zoneByRow = new Map(
     layout.rowSlices.map((s) => [s.rowNumber, s.groupId]),
   );
-  const standingTeachers = new Map<number, number>();
-  for (const t of layout.teachers) {
-    if (t.placement !== "standing") continue;
-    standingTeachers.set(
-      t.rowNumber,
-      (standingTeachers.get(t.rowNumber) ?? 0) + 1,
-    );
-  }
+  const teacherCountByRow = new Map(
+    layout.teacherRows.map((t) => [t.rowNumber, t.count]),
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
       {rows.map((row) => {
+        const size = row.seats.length;
         const zone = zoneByRow.get(row.rowNumber);
-        const dark = zoneIsDark(zone);
-        const teacherCount = standingTeachers.get(row.rowNumber) ?? 0;
+        const teacherCount = teacherCountByRow.get(row.rowNumber) ?? 0;
+        const segments = buildSegments(row.seats, zone);
+        const mostlyTeachers = teacherCount > size / 2;
+        const darkText = mostlyTeachers || zoneIsDark(zone);
         return (
           <div key={row.rowNumber} className="flex justify-center">
             <div
-              className={`flex h-11 min-w-0 items-center justify-between gap-2 rounded-xl px-3 ${
-                dark ? "text-white" : "text-slate-800"
-              }`}
-              style={{
-                width: `${Math.max(40, (row.size / maxSize) * 100)}%`,
-                backgroundColor: zoneShade(zone),
-              }}
+              className="relative h-11 min-w-0 overflow-hidden rounded-xl"
+              style={{ width: `${Math.max(42, (size / maxSize) * 100)}%` }}
             >
-              <span className="whitespace-nowrap text-sm font-extrabold">
-                Row {row.rowNumber}
-              </span>
-              <span className="text-xl font-black tabular-nums leading-none">
-                {row.size}
-              </span>
-              <span
-                className={`whitespace-nowrap text-xs font-bold ${
-                  dark ? "text-white/80" : "text-slate-500"
+              {/* Seat segments: grey students, blue teachers */}
+              <div className="absolute inset-0 flex">
+                {segments.map((seg, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: `${(seg.count / size) * 100}%`,
+                      backgroundColor: seg.color,
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Labels over the band */}
+              <div
+                className={`absolute inset-0 flex items-center justify-between gap-2 px-3 ${
+                  darkText ? "text-white" : "text-slate-800"
                 }`}
               >
-                {zone ?? "—"}
-                {teacherCount > 0 && ` +${teacherCount}T`}
-              </span>
+                <span className="whitespace-nowrap text-sm font-extrabold drop-shadow-sm">
+                  Row {row.rowNumber}
+                </span>
+                <span className="text-xl font-black tabular-nums leading-none drop-shadow-sm">
+                  {size}
+                </span>
+                <span
+                  className={`whitespace-nowrap text-xs font-bold ${
+                    darkText ? "text-white/85" : "text-slate-600"
+                  }`}
+                >
+                  {teacherCount > 0
+                    ? zone
+                      ? `${zone} +${teacherCount}T`
+                      : `${teacherCount} teachers`
+                    : (zone ?? "—")}
+                </span>
+              </div>
             </div>
           </div>
         );
       })}
 
-      {layout.seatedTeacherCount > 0 && (
-        <div className="flex justify-center">
-          <div
-            className="flex h-11 min-w-0 items-center justify-between gap-2 rounded-xl bg-blue-600 px-3 text-white"
-            style={{
-              width: `${Math.max(40, (layout.seatedTeacherCount / maxSize) * 100)}%`,
-            }}
-          >
-            <span className="whitespace-nowrap text-sm font-extrabold">
-              Seated
-            </span>
-            <span className="text-xl font-black tabular-nums leading-none">
-              {layout.seatedTeacherCount}
-            </span>
-            <span className="whitespace-nowrap text-xs font-bold text-white/80">
-              Teachers
-            </span>
-          </div>
-        </div>
-      )}
-
       <div className="mt-2 text-center text-[11px] font-extrabold tracking-[0.25em] text-slate-400">
         ▲ CAMERA THIS SIDE ▲
       </div>
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-3 w-5 rounded bg-blue-600" />
+          Teachers
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-3 w-5 rounded bg-slate-400" />
+          Students (darker = taller)
+        </span>
+      </div>
     </div>
   );
+}
+
+/** Merge consecutive seats of the same kind into proportional segments. */
+function buildSegments(
+  seats: StageLayout["seatRows"][number]["seats"],
+  zone: string | undefined,
+): BandSegment[] {
+  const segments: BandSegment[] = [];
+  for (const seat of seats) {
+    const kind = seat.occupant.kind;
+    const color = kind === "teacher" ? "#2563eb" : zoneShade(zone);
+    const last = segments[segments.length - 1];
+    if (last && last.kind === kind) {
+      last.count += 1;
+    } else {
+      segments.push({ kind, count: 1, color });
+    }
+  }
+  return segments;
 }

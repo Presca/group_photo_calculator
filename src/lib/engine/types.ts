@@ -7,7 +7,6 @@
  * without touching React code.
  */
 
-export type TeacherLayout = "front-seated" | "front-standing" | "mixed";
 export type PhotoMode = "single" | "stitch";
 export type HeightGroupCount = 5 | 7 | 9;
 export type Parity = "odd" | "even";
@@ -20,9 +19,8 @@ export interface SessionConfig {
   stageWidthM: number;
   /** Average shoulder width per person in metres (editable default 0.45). */
   shoulderWidthM: number;
-  /** Number of standing rows / platform levels available. */
+  /** Number of rows / platform levels available (front row included). */
   standingRows: number;
-  teacherLayout: TeacherLayout;
   photoMode: PhotoMode;
   heightGroupCount: HeightGroupCount;
   /** Rows covered by each photo when stitching. */
@@ -88,11 +86,16 @@ export interface TeacherPlan {
   id: string;
   label: string;
   role: TeacherRole;
-  placement: "seated" | "standing";
-  /** 0 = seated row in front of row 1; otherwise the standing row number. */
+  /** Row the teacher stands/sits in (1 = front row). */
   rowNumber: number;
   /** Seat number within the row (1 = stage left). */
   seatNumber: number;
+}
+
+/** How many teachers ended up in each row. */
+export interface TeacherRowSummary {
+  rowNumber: number;
+  count: number;
 }
 
 export interface SeatOccupant {
@@ -111,7 +114,6 @@ export interface Seat {
 
 export interface SeatRow {
   rowNumber: number;
-  kind: "seated" | "standing";
   seats: Seat[];
 }
 
@@ -136,9 +138,9 @@ export interface OperationStep {
   kind: "call" | "direction";
   /** Small heading, e.g. "NOW CALL". */
   heading: string;
-  /** The big central text, e.g. "S9". */
+  /** The big central text, e.g. "QUEUE A". */
   primary: string;
-  /** Instruction, e.g. "Move to Row 8". */
+  /** Instruction, e.g. "S8 — fill Row 8". */
   detail: string;
   queueLetter?: string;
 }
@@ -158,9 +160,9 @@ export interface StageLayout {
   groupSpans: GroupRowSpan[];
   rowSlices: RowGroupSlice[];
   teachers: TeacherPlan[];
-  seatedTeacherCount: number;
-  standingTeacherCount: number;
-  /** Front (seated) row first, then standing rows front to back. */
+  /** Rows containing teachers, front first. */
+  teacherRows: TeacherRowSummary[];
+  /** Front row first (rowNumber ascending). */
   seatRows: SeatRow[];
   queues: QueuePlan[];
   rowLabels: RowLabel[];
