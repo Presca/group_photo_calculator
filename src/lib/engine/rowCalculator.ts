@@ -14,35 +14,71 @@ export function parityOf(n: number): Parity {
 }
 
 /**
- * Row 1 (front) must be odd, then rows alternate odd/even/odd/even
- * going towards the back. This is strict: generated rows never deviate
- * — the arithmetic remainder stands at the side as an "extra" instead.
+ * Row parities alternate starting from the chosen front-row parity
+ * (odd by default): odd/even/odd/even… or even/odd/even/odd…
+ * This is strict: generated rows never deviate — the arithmetic
+ * remainder stands at the side as an "extra" instead.
  */
-export function targetParityForRow(rowNumber: number): Parity {
-  return rowNumber % 2 === 1 ? "odd" : "even";
+export function targetParityForRow(
+  rowNumber: number,
+  firstRowParity: Parity = "odd",
+): Parity {
+  const sameAsFirst = rowNumber % 2 === 1;
+  if (sameAsFirst) return firstRowParity;
+  return firstRowParity === "odd" ? "even" : "odd";
 }
 
 /** Largest size ≤ maxPerRow with the row's required parity. */
-export function rowCapFor(rowNumber: number, maxPerRow: number): number {
-  const wantOdd = targetParityForRow(rowNumber) === "odd";
+export function rowCapFor(
+  rowNumber: number,
+  maxPerRow: number,
+  firstRowParity: Parity = "odd",
+): number {
+  const wantOdd = targetParityForRow(rowNumber, firstRowParity) === "odd";
   if (wantOdd) return maxPerRow % 2 === 1 ? maxPerRow : maxPerRow - 1;
   return maxPerRow % 2 === 0 ? maxPerRow : maxPerRow - 1;
 }
 
-/** Total people the strict odd/even pattern can hold in rowCount rows. */
+/** Total people the strict parity pattern can hold in rowCount rows. */
 export function strictRowCapacity(
   rowCount: number,
   maxPerRow: number,
+  firstRowParity: Parity = "odd",
 ): number {
   let sum = 0;
-  for (let r = 1; r <= rowCount; r++) sum += rowCapFor(r, maxPerRow);
+  for (let r = 1; r <= rowCount; r++) {
+    sum += rowCapFor(r, maxPerRow, firstRowParity);
+  }
   return sum;
+}
+
+/**
+ * Fewest rows whose strict parity pattern holds `count` people (one
+ * arithmetic remainder is allowed — they stand at the side).
+ */
+export function minimalRowsFor(
+  count: number,
+  maxPerRow: number,
+  firstRowParity: Parity = "odd",
+): number {
+  if (count <= 0 || maxPerRow <= 0) return 0;
+  let rows = Math.max(1, Math.ceil(count / maxPerRow));
+  let guard = 0;
+  while (
+    strictRowCapacity(rows, maxPerRow, firstRowParity) < count - 1 &&
+    guard++ < 1000
+  ) {
+    rows += 1;
+  }
+  return rows;
 }
 
 export interface CalculateRowsInput {
   peopleCount: number;
   rowCount: number;
   maxPerRow: number;
+  /** Front row parity; subsequent rows alternate. Default odd. */
+  firstRowParity?: Parity;
   /**
    * rowNumber → pinned size. Live on-the-day overrides: pinned rows
    * keep exactly this many people (reality wins over parity) and only
@@ -54,27 +90,23 @@ export interface CalculateRowsInput {
 /**
  * Distribute people across rows.
  *
- * Set rule: every generated row strictly follows the odd/even/odd/even
- * pattern. Sizes are constructed directly with the correct parity:
- * odd-target rows are seeded with 1 person and the rest are dealt out
- * in pairs (pairs never change parity), remainder pairs going to the
- * back rows so the back is fullest. When the total's parity cannot
- * match the pattern, the odd person out becomes an "extra" (reported
- * in `extras`) who stands at the side of the layout rather than
- * breaking a row's parity.
- *
- * Because the construction is a closed formula rather than an
- * iterative shuffle, changing the head-count by 1 or 2 only nudges one
- * or two rows — which is what keeps live adjustments stable on the day.
+ * Set rules:
+ * - Every generated row strictly alternates parity from the chosen
+ *   front-row parity; rows never deviate. The arithmetic remainder
+ *   becomes an "extra" (reported in `extras`) standing at the side.
+ * - Rows FILL UP: each row front-to-back is filled to its parity
+ *   capacity, and the back row takes the remainder. Adding a person
+ *   on the day therefore only changes the back row.
  *
  * With `fixedSizes` (live pins), pinned rows are untouchable — a pin
  * is allowed to break the pattern because it records reality — and the
- * remaining people are distributed strictly across the unpinned rows.
+ * remaining people fill the unpinned rows front-to-back.
  */
 export function calculateRows({
   peopleCount,
   rowCount,
   maxPerRow,
+  firstRowParity = "odd",
   fixedSizes,
 }: CalculateRowsInput): RowCalculationResult {
   const warnings: string[] = [];
@@ -106,7 +138,10 @@ export function calculateRows({
   const fixed = sanitizeFixed(fixedSizes, rowCount, maxPerRow, warnings);
 
   if (fixed.size === 0) {
-    const rowsUsed = Math.min(rowCount, peopleCount);
+    const rowsUsed = Math.min(
+      rowCount,
+      minimalRowsFor(peopleCount, maxPerRow, firstRowParity),
+    );
     if (rowsUsed < rowCount) {
       warnings.push(
         `Only ${rowsUsed} of ${rowCount} rows are needed for this group size.`,
@@ -117,11 +152,12 @@ export function calculateRows({
       peopleCount,
       rowNumbers,
       maxPerRow,
+      firstRowParity,
     );
     if (unplaced > 0) {
       ok = false;
       warnings.push(
-        `${unplaced} ${unplaced === 1 ? "person does" : "people do"} not fit the odd/even row pattern at this stage width.`,
+        `${unplaced} ${unplaced === 1 ? "person does" : "people do"} not fit the alternating row pattern at this stage width.`,
       );
       suggestions.push("Add another row or switch to multi-shot stitching.");
     }
@@ -130,6 +166,7 @@ export function calculateRows({
       sizes,
       extras: sideExtras,
       pinnedRows: fixed,
+      firstRowParity,
       ok,
       maxPerRow,
       capacity,
@@ -158,12 +195,11 @@ export function calculateRows({
     remaining,
     freeRowNumbers,
     maxPerRow,
+    firstRowParity,
   );
   if (unplaced > 0) {
     ok = false;
-    warnings.push(
-      `${unplaced} people do not fit in the unpinned rows.`,
-    );
+    warnings.push(`${unplaced} people do not fit in the unpinned rows.`);
     suggestions.push("Unpin a row, add another row, or switch to stitching.");
   }
 
@@ -178,6 +214,7 @@ export function calculateRows({
     sizes,
     extras: sideExtras,
     pinnedRows: fixed,
+    firstRowParity,
     ok,
     maxPerRow,
     capacity,
@@ -221,6 +258,7 @@ interface BuildResultInput {
   sizes: number[];
   extras: number;
   pinnedRows: Map<number, number>;
+  firstRowParity: Parity;
   ok: boolean;
   maxPerRow: number;
   capacity: number;
@@ -234,6 +272,7 @@ function buildResult({
   sizes,
   extras,
   pinnedRows,
+  firstRowParity,
   ok,
   maxPerRow,
   capacity,
@@ -243,7 +282,7 @@ function buildResult({
 }: BuildResultInput): RowCalculationResult {
   const rows: RowPlan[] = rowNumbers.map((rowNumber, i) => {
     const size = sizes[i];
-    const targetParity = targetParityForRow(rowNumber);
+    const targetParity = targetParityForRow(rowNumber, firstRowParity);
     const actualParity = parityOf(size);
     return {
       rowNumber,
@@ -259,7 +298,7 @@ function buildResult({
   );
   if (relaxedPinned.length > 0) {
     warnings.push(
-      `Pinned row ${relaxedPinned.map((r) => r.rowNumber).join(", ")} breaks the odd/even pattern (pinned counts keep their real value).`,
+      `Pinned row ${relaxedPinned.map((r) => r.rowNumber).join(", ")} breaks the alternating pattern (pinned counts keep their real value).`,
     );
   }
 
@@ -278,16 +317,17 @@ function buildResult({
 }
 
 /**
- * Core strict-parity distribution over an ordered set of rows (front
- * first). Each row's cap is the largest size ≤ maxPerRow with its
- * required parity, so generated rows can never break the pattern.
- * Returns `sideExtras` — the odd person out who stands at the side —
- * and `unplaced` when the strict pattern cannot hold everyone.
+ * Core strict-parity FILL-UP distribution over an ordered set of rows
+ * (front first). Each row is filled to its parity capacity in order;
+ * the last rows take the remainder. Returns `sideExtras` — the odd
+ * person out who stands at the side — and `unplaced` when the strict
+ * pattern cannot hold everyone.
  */
 function distribute(
   count: number,
   rowNumbers: number[],
   maxPerRow: number,
+  firstRowParity: Parity,
 ): { sizes: number[]; sideExtras: number; unplaced: number } {
   const n = rowNumbers.length;
   const sizes: number[] = new Array(n).fill(0);
@@ -296,14 +336,14 @@ function distribute(
   }
 
   if (count < n) {
-    // Degenerate: fewer people than rows. Back rows get one each.
-    for (let i = 0; i < count; i++) sizes[n - 1 - i] = 1;
+    // Degenerate: fewer people than rows. Front rows get one each.
+    for (let i = 0; i < count; i++) sizes[i] = 1;
     return { sizes, sideExtras: 0, unplaced: 0 };
   }
 
-  const caps = rowNumbers.map((r) => rowCapFor(r, maxPerRow));
+  const caps = rowNumbers.map((r) => rowCapFor(r, maxPerRow, firstRowParity));
   const seeds: number[] = rowNumbers.map((r) =>
-    targetParityForRow(r) === "odd" ? 1 : 0,
+    targetParityForRow(r, firstRowParity) === "odd" ? 1 : 0,
   );
   const oddCount = seeds.reduce((a, b) => a + b, 0);
 
@@ -316,58 +356,13 @@ function distribute(
   const pairs = Math.min(pairsWanted, totalPairCap);
   const unplaced = 2 * (pairsWanted - pairs);
 
-  // Even share first, capped per row; remainder pairs go to the back.
-  const per = Math.floor(pairs / n);
-  const assigned = pairCaps.map((pc) => Math.min(per, pc));
-  let remaining = pairs - assigned.reduce((a, b) => a + b, 0);
-  let guard = 0;
-  while (remaining > 0 && guard++ < 100000) {
-    let progressed = false;
-    for (let i = n - 1; i >= 0 && remaining > 0; i--) {
-      if (assigned[i] < pairCaps[i]) {
-        assigned[i] += 1;
-        remaining -= 1;
-        progressed = true;
-      }
-    }
-    if (!progressed) break;
-  }
-  for (let i = 0; i < n; i++) sizes[i] = 2 * assigned[i] + seeds[i];
-
-  // No used row should be empty: pull a pair from the fullest row
-  // (pair moves preserve parity).
+  // Fill up: front rows take their full parity capacity, the back row
+  // takes whatever remains.
+  let left = pairs;
   for (let i = 0; i < n; i++) {
-    let fillGuard = 0;
-    while (sizes[i] < 1 && fillGuard++ < 1000) {
-      let donor = -1;
-      for (let j = 0; j < n; j++) {
-        if (j !== i && sizes[j] >= 3 && (donor === -1 || sizes[j] > sizes[donor])) {
-          donor = j;
-        }
-      }
-      if (donor === -1) break;
-      sizes[donor] -= 2;
-      sizes[i] += 2;
-    }
-  }
-
-  // Keep rows balanced: a row should not dwarf the row behind it.
-  // Pair moves preserve parity; per-row caps preserve the pattern.
-  let moved = true;
-  guard = 0;
-  while (moved && guard++ < 1000) {
-    moved = false;
-    for (let i = 0; i < n - 1; i++) {
-      while (
-        sizes[i] - sizes[i + 1] >= 2 &&
-        sizes[i + 1] + 2 <= caps[i + 1] &&
-        sizes[i] - 2 >= 1
-      ) {
-        sizes[i] -= 2;
-        sizes[i + 1] += 2;
-        moved = true;
-      }
-    }
+    const take = Math.min(pairCaps[i], left);
+    sizes[i] = 2 * take + seeds[i];
+    left -= take;
   }
 
   return { sizes, sideExtras, unplaced };

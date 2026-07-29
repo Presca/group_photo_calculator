@@ -24,8 +24,8 @@ npm run build    # production build
 
 | Area | What it does |
 | --- | --- |
-| **Session Setup** | School, student/teacher/VIP counts, stage width, shoulder width, photo mode. Rows are computed automatically from the head-count and stage width — nothing to configure. |
-| **Row Calculator** | Strict set rule: front row odd, second even, alternating back — generated rows never deviate. When the arithmetic leaves someone over, they stand at the side of the 2nd-last row as an "extra", marked in amber on the layout and included in that row's queue. Sizes balanced with the back fullest; never exceeds stage capacity. |
+| **Session Setup** | School, student/teacher/VIP counts, stage width, shoulder width, front-row parity (odd/even), photo mode. Rows are computed automatically from the head-count and stage width — nothing to configure. |
+| **Row Calculator** | Strict set rule: rows alternate odd/even counts starting from a configurable front-row parity — generated rows never deviate. Rows fill to capacity front-first, the back row takes the remainder. When the arithmetic leaves someone over, they stand at the side of the 2nd-last row as an "extra", marked in amber and included in that row's queue. |
 | **Height Zones / Queues** | Zones are aligned to row boundaries: each queue holds exactly its row's student count, so a queue empties into its row and the row comes out full — no mid-queue splits, and miscounts surface immediately. Choose up to 5 / 7 / 9 zones; fewer zones than rows merge adjacent rows per queue. |
 | **Teacher Placement** | Set rule: teachers always take the front row; VIP teachers take precedence — the contiguous centre-most seats (VIP 1 dead centre) and first in the call sequence. Overflow spills to Row 2, Row 3, … spread evenly *between* students. |
 | **Within-row taper** | Set rule: tallest in the middle of every row, tapering to the shortest at the sides. Queues stay single-file: tallest leads, fill left of centre outward, then right of centre outward — nobody is split off once queued. |

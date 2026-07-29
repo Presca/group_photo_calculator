@@ -73,14 +73,15 @@ describe("generateLayout", () => {
     });
     const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
     expect(row1.seats.every((s) => s.occupant.kind === "teacher")).toBe(true);
+    // Rows fill to capacity: row 1 holds 39, row 2 takes 21 overflow.
     expect(layout.teacherRows).toEqual([
-      { rowNumber: 1, count: 37 },
-      { rowNumber: 2, count: 23 },
+      { rowNumber: 1, count: 39 },
+      { rowNumber: 2, count: 21 },
     ]);
     const row2 = layout.seatRows.find((r) => r.rowNumber === 2)!;
     const kinds = row2.seats.map((s) => s.occupant.kind);
-    expect(kinds.filter((k) => k === "teacher")).toHaveLength(23);
-    expect(kinds.filter((k) => k === "student")).toHaveLength(13);
+    expect(kinds.filter((k) => k === "teacher")).toHaveLength(21);
+    expect(kinds.filter((k) => k === "student")).toHaveLength(19);
     // Interspersed: the row must not start with a solid teacher block.
     expect(kinds.slice(0, 2)).toContain("student");
   });
@@ -141,6 +142,19 @@ describe("generateLayout", () => {
     const layout = generateLayout(baseConfig);
     expect(layout.rowsResult.rows[0].size % 2).toBe(1);
     expect(layout.rowsResult.rows[1].size % 2).toBe(0);
+    // Rows fill to capacity front-first: front row is full.
+    expect(layout.rowsResult.rows[0].size).toBe(39);
+  });
+
+  it("supports an even front row via config", () => {
+    const layout = generateLayout({ ...baseConfig, firstRowParity: "even" });
+    expect(layout.rowsResult.rows[0].size % 2).toBe(0);
+    expect(layout.rowsResult.rows[1].size % 2).toBe(1);
+    expect(layout.rowsResult.rows[0].size).toBe(40);
+    expect(
+      layout.rowsResult.rows.reduce((s, r) => s + r.size, 0) +
+        layout.rowsResult.extras,
+    ).toBe(300);
   });
 
   it("produces a stitch plan only in stitch mode", () => {

@@ -8,7 +8,7 @@ import { planQueues } from "./queuePlanner";
 import {
   calculateRows,
   maxPeoplePerRow,
-  strictRowCapacity,
+  minimalRowsFor,
 } from "./rowCalculator";
 import { planStitch } from "./stitchPlanner";
 import {
@@ -35,6 +35,7 @@ export const DEFAULT_CONFIG: SessionConfig = {
   vipTeachers: 5,
   stageWidthM: 18,
   shoulderWidthM: 0.45,
+  firstRowParity: "odd",
   photoMode: "single",
   stitchRowsPerPhoto: 3,
   stitchOverlapRows: 1,
@@ -54,7 +55,8 @@ export const DEFAULT_CONFIG: SessionConfig = {
  *    shortest at the sides. Students file in from one queue, tallest
  *    first: fill left of centre outward, then right of centre outward
  *    — nobody is split off once queued.
- * 3. The front row is always odd, the second even, alternating back.
+ * 3. Rows strictly alternate odd/even counts, starting from the
+ *    configurable front-row parity; rows fill to capacity front-first.
  *
  * `rowOverrides` are live on-the-day pins: when the operators squeeze
  * more or fewer people into a row than planned, that row is fixed at
@@ -75,22 +77,14 @@ export function generateLayout(
   // needs at this stage width.
   const totalTeachers = config.totalTeachers + config.vipTeachers;
   const totalPeople = config.totalStudents + totalTeachers;
-  // Strict odd/even rows hold slightly less than rowCount × max, so
-  // grow the row count until the pattern fits everyone (the one
-  // arithmetic remainder is allowed — they stand at the side).
-  let rowCount = maxPerRow > 0 ? Math.max(1, Math.ceil(totalPeople / maxPerRow)) : 0;
-  let rowGuard = 0;
-  while (
-    rowCount > 0 &&
-    strictRowCapacity(rowCount, maxPerRow) < totalPeople - 1 &&
-    rowGuard++ < 100
-  ) {
-    rowCount += 1;
-  }
+  // Exactly as many rows as the strict alternating pattern needs (the
+  // one arithmetic remainder is allowed — they stand at the side).
+  const rowCount = minimalRowsFor(totalPeople, maxPerRow, config.firstRowParity);
   const rowsResult = calculateRows({
     peopleCount: totalPeople,
     rowCount,
     maxPerRow,
+    firstRowParity: config.firstRowParity,
     fixedSizes: rowOverrides,
   });
   warnings.push(...rowsResult.warnings);

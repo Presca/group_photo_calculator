@@ -24,6 +24,11 @@ export interface SessionConfig {
   stageWidthM: number;
   /** Average shoulder width per person in metres (editable default 0.45). */
   shoulderWidthM: number;
+  /**
+   * Whether the front row holds an odd or even count; subsequent rows
+   * alternate from it.
+   */
+  firstRowParity: Parity;
   photoMode: PhotoMode;
   /** Rows covered by each photo when stitching. */
   stitchRowsPerPhoto: number;

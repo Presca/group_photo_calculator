@@ -74,16 +74,14 @@ describe("calculateRows", () => {
     }
   });
 
-  it("keeps row sizes balanced with the back rows fullest", () => {
+  it("fills rows to capacity front-first, remainder in the back row", () => {
     const result = calculateRows({ peopleCount: 296, rowCount: 8, maxPerRow: 40 });
     const sizes = result.rows.map((r) => r.size);
-    // A row should never dwarf the row behind it.
-    for (let i = 0; i < sizes.length - 1; i++) {
-      expect(sizes[i] - sizes[i + 1]).toBeLessThanOrEqual(1);
-    }
-    // Largest row is at (or near) the back.
-    const max = Math.max(...sizes);
-    expect(sizes[sizes.length - 1]).toBeGreaterThanOrEqual(max - 2);
+    // Front rows at their parity caps: odd rows 39, even rows 40.
+    expect(sizes.slice(0, 7)).toEqual([39, 40, 39, 40, 39, 40, 39]);
+    // Back row takes what remains.
+    expect(sizes[7]).toBe(296 - 276);
+    expect(sizes.reduce((a, b) => a + b, 0)).toBe(296);
   });
 
   it("flags impossible sessions and suggests fixes", () => {
@@ -101,9 +99,25 @@ describe("calculateRows", () => {
   });
 
   it("uses fewer rows when the group is tiny", () => {
+    // 5 people fit one strict row — no need to spread them out.
     const result = calculateRows({ peopleCount: 5, rowCount: 8, maxPerRow: 40 });
-    expect(result.rows.length).toBe(5);
-    expect(result.rows.reduce((sum, r) => sum + r.size, 0)).toBe(5);
+    expect(result.rows.length).toBe(1);
+    expect(result.rows[0].size).toBe(5);
+    expect(result.warnings.join(" ")).toMatch(/only 1 of 8 rows/i);
+  });
+
+  it("supports an even front row, alternating from there", () => {
+    const result = calculateRows({
+      peopleCount: 296,
+      rowCount: 8,
+      maxPerRow: 40,
+      firstRowParity: "even",
+    });
+    const sizes = result.rows.map((r) => r.size);
+    expect(sizes.slice(0, 7)).toEqual([40, 39, 40, 39, 40, 39, 40]);
+    expect(sizes[0] % 2).toBe(0);
+    expect(sizes[1] % 2).toBe(1);
+    expect(result.rows.every((r) => !r.parityRelaxed)).toBe(true);
   });
 
   it("never relaxes parity — the odd person out becomes a side extra", () => {

@@ -91,6 +91,20 @@ export default function SetupPage() {
           </div>
 
           <SegmentedControl
+            label="Front row count"
+            value={config.firstRowParity}
+            options={[
+              { value: "odd", label: "Odd" },
+              { value: "even", label: "Even" },
+            ]}
+            onChange={(v) => patchConfig({ firstRowParity: v })}
+          />
+          <p className="-mt-2 text-sm font-semibold text-slate-500">
+            Rows alternate from the front: odd → even → odd… or even → odd →
+            even…
+          </p>
+
+          <SegmentedControl
             label="Photo Mode"
             value={config.photoMode}
             options={[
