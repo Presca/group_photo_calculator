@@ -42,24 +42,70 @@ export function centreOutSeatOrder(size: number): number[] {
   return order;
 }
 
+/** Most teacher clusters per row when interspersing overflow. */
+const MAX_TEACHER_CLUSTERS = 5;
+
 /**
- * Evenly spaced seat numbers for interspersing k teachers among a row
- * of n seats, so overflow teachers stand *between* students rather
- * than clumping together.
+ * Seat numbers for interspersing k overflow teachers among a row of n
+ * seats, so teachers stand *between* students. Teachers are grouped
+ * into at most MAX_TEACHER_CLUSTERS evenly spaced clusters — with a
+ * dense overflow, single-seat interleaving would produce an unreadable
+ * teacher/student zebra on stage and on the layout bands.
  */
 export function interspersedSeatOrder(n: number, k: number): number[] {
   if (k >= n) return Array.from({ length: n }, (_, i) => i + 1);
-  const used = new Set<number>();
-  const out: number[] = [];
-  for (let j = 1; j <= k; j++) {
-    let pos = Math.round((j * (n + 1)) / (k + 1));
-    pos = Math.min(n, Math.max(1, pos));
-    while (used.has(pos) && pos < n) pos++;
-    while (used.has(pos) && pos > 1) pos--;
-    used.add(pos);
-    out.push(pos);
+  if (k <= 0) return [];
+  const students = n - k;
+  const clusters = Math.min(MAX_TEACHER_CLUSTERS, k, students + 1);
+
+  // Cluster sizes: extras go to the middle clusters.
+  const blockSizes: number[] = new Array(clusters).fill(
+    Math.floor(k / clusters),
+  );
+  const midOut = middleOutOrder(clusters);
+  for (let i = 0; i < k % clusters; i++) blockSizes[midOut[i]] += 1;
+
+  // Student gaps (clusters + 1, including both ends): extras go to the
+  // outermost gaps so the row always starts and ends with students.
+  const gapCount = clusters + 1;
+  const gaps: number[] = new Array(gapCount).fill(
+    Math.floor(students / gapCount),
+  );
+  const endsFirst = endsFirstOrder(gapCount);
+  for (let i = 0; i < students % gapCount; i++) gaps[endsFirst[i]] += 1;
+
+  const seats: number[] = [];
+  let position = 1;
+  for (let b = 0; b < clusters; b++) {
+    position += gaps[b];
+    for (let s = 0; s < blockSizes[b]; s++) seats.push(position++);
   }
-  return out;
+  return seats;
+}
+
+/** Index order [middle, middle+1, middle−1, …] for length g. */
+function middleOutOrder(g: number): number[] {
+  const centre = Math.floor((g - 1) / 2);
+  const order = [centre];
+  for (let off = 1; order.length < g; off++) {
+    if (centre + off < g) order.push(centre + off);
+    if (order.length < g && centre - off >= 0) order.push(centre - off);
+  }
+  return order;
+}
+
+/** Index order [0, m−1, 1, m−2, …] for length m. */
+function endsFirstOrder(m: number): number[] {
+  const order: number[] = [];
+  let a = 0;
+  let b = m - 1;
+  while (a <= b) {
+    order.push(a);
+    if (b !== a) order.push(b);
+    a += 1;
+    b -= 1;
+  }
+  return order;
 }
 
 export interface TeacherAssignment {
