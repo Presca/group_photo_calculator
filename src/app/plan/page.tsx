@@ -106,7 +106,7 @@ export default function PlanPage() {
                     {queue.count} students
                   </div>
                   <div className="text-sm font-semibold text-slate-500">
-                    {queue.groupId} · {queue.descriptor}
+                    {queue.descriptor}
                   </div>
                 </div>
               </div>

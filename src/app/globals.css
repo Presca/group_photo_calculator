@@ -25,6 +25,11 @@ select {
   body {
     background: white !important;
   }
+  /* Keep the snapshot band colours on paper. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .no-print {
     display: none !important;
   }

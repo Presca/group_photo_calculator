@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { StageCanvas } from "@/components/StageCanvas";
+import { StageSnapshot } from "@/components/StageSnapshot";
 import { BigButton, EmptyState } from "@/components/ui";
 import { formatRowRange, type StageLayout } from "@/lib/engine";
 import { useSession } from "@/store/SessionContext";
@@ -28,7 +28,7 @@ export default function PrintPage() {
 }
 
 function PrintPack() {
-  const { state, layout, seatRows } = useSession();
+  const { state, layout } = useSession();
   const params = useSearchParams();
   const [enabled, setEnabled] = useState<Record<SectionKey, boolean>>({
     layout: true,
@@ -103,7 +103,7 @@ function PrintPack() {
         </div>
       </div>
 
-      {enabled.layout && <LayoutSheet layout={layout} seatRows={seatRows} />}
+      {enabled.layout && <LayoutSheet layout={layout} />}
       {enabled.teachers && <TeacherGuide layout={layout} />}
       {enabled.queues && <QueueGuide layout={layout} />}
       {enabled.labels && <RowLabels layout={layout} />}
@@ -135,25 +135,22 @@ function Sheet({
   );
 }
 
-function LayoutSheet({
-  layout,
-  seatRows,
-}: {
-  layout: StageLayout;
-  seatRows: StageLayout["seatRows"];
-}) {
+function LayoutSheet({ layout }: { layout: StageLayout }) {
   const rowsBackFirst = [...layout.rowsResult.rows].sort(
     (a, b) => b.rowNumber - a.rowNumber,
   );
+  const descriptorByZone = new Map(
+    layout.groups.map((g) => [g.id, g.descriptor]),
+  );
   return (
     <Sheet title="Layout Sheet" layout={layout}>
-      <StageCanvas seatRows={seatRows} interactive={false} />
+      <StageSnapshot layout={layout} />
       <table className="mt-6 w-full text-left">
         <thead>
           <tr className="border-b-2 border-slate-300 text-sm font-bold uppercase text-slate-500">
             <th className="py-2">Row</th>
             <th className="py-2">People</th>
-            <th className="py-2">Height groups</th>
+            <th className="py-2">Who</th>
           </tr>
         </thead>
         <tbody className="text-lg font-semibold">
@@ -165,7 +162,10 @@ function LayoutSheet({
                 {[
                   ...layout.rowSlices
                     .filter((s) => s.rowNumber === row.rowNumber)
-                    .map((s) => `${s.groupId} (${s.count})`),
+                    .map(
+                      (s) =>
+                        `${descriptorByZone.get(s.groupId) ?? s.groupId} (${s.count})`,
+                    ),
                   ...layout.teacherRows
                     .filter((t) => t.rowNumber === row.rowNumber)
                     .map((t) => `${t.count} teachers`),
@@ -242,10 +242,7 @@ function QueueGuide({ layout }: { layout: StageLayout }) {
           <div className="text-[10rem] font-black leading-none text-blue-700">
             {queue.letter}
           </div>
-          <div className="mt-6 text-7xl font-black">{queue.groupId}</div>
-          <div className="mt-2 text-3xl font-extrabold text-slate-500">
-            {queue.descriptor}
-          </div>
+          <div className="mt-6 text-7xl font-black">{queue.descriptor}</div>
           <div className="mt-8 rounded-2xl bg-slate-900 px-8 py-4 text-4xl font-black text-white">
             {formatRowRange(queue.fromRow, queue.toRow)}
           </div>
@@ -277,7 +274,7 @@ function RowLabels({ layout }: { layout: StageLayout }) {
             {label.descriptor}
           </div>
           <div className="mt-8 text-3xl font-extrabold text-slate-500">
-            {label.groupIds.join(" · ") || "—"} · {label.size} people
+            {label.size} people
           </div>
         </section>
       ))}
@@ -286,7 +283,6 @@ function RowLabels({ layout }: { layout: StageLayout }) {
 }
 
 function ZoneGuide({ layout }: { layout: StageLayout }) {
-  const spanByGroup = new Map(layout.groupSpans.map((s) => [s.groupId, s]));
   return (
     <Sheet title="Height Zone Guide" layout={layout}>
       <p className="mb-4 text-lg font-semibold text-slate-600">
@@ -296,24 +292,22 @@ function ZoneGuide({ layout }: { layout: StageLayout }) {
       <table className="w-full text-left text-lg font-semibold">
         <thead>
           <tr className="border-b-2 border-slate-300 text-sm font-bold uppercase text-slate-500">
-            <th className="py-2">Zone</th>
+            <th className="py-2">Queue</th>
             <th className="py-2">Height</th>
             <th className="py-2">Students</th>
             <th className="py-2">Rows</th>
-            <th className="py-2">Queue</th>
           </tr>
         </thead>
         <tbody>
           {layout.queues.map((queue) => (
             <tr key={queue.groupId} className="border-b border-slate-200">
-              <td className="py-2 font-extrabold">{queue.groupId}</td>
-              <td className="py-2">{queue.descriptor}</td>
+              <td className="py-2 font-extrabold text-blue-700">
+                {queue.letter}
+              </td>
+              <td className="py-2 font-extrabold">{queue.descriptor}</td>
               <td className="py-2 tabular-nums">{queue.count}</td>
               <td className="py-2">
                 {formatRowRange(queue.fromRow, queue.toRow)}
-              </td>
-              <td className="py-2 font-extrabold text-blue-700">
-                {queue.letter}
               </td>
             </tr>
           ))}

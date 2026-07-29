@@ -2,7 +2,33 @@
 
 import { useMemo } from "react";
 import type { StageLayout } from "@/lib/engine";
-import { zoneIsDark, zoneShade } from "./StageCanvas";
+
+const ZONE_SHADES = [
+  "#e2e8f0", // shortest
+  "#dbe1e8",
+  "#cbd5e1",
+  "#b6c2d1",
+  "#a3b1c2",
+  "#94a3b8",
+  "#8393aa",
+  "#71809b",
+  "#64748b", // tallest
+];
+
+/** Grey shade for a height zone id ("S1"…"S9"): taller = darker. */
+export function zoneShade(groupId?: string): string {
+  if (!groupId) return "#cbd5e1";
+  const n = Number(groupId.replace("S", ""));
+  if (!Number.isFinite(n)) return "#cbd5e1";
+  return ZONE_SHADES[Math.min(ZONE_SHADES.length - 1, Math.max(0, n - 1))];
+}
+
+/** Whether a zone's shade is dark enough to need white text on it. */
+export function zoneIsDark(groupId?: string): boolean {
+  if (!groupId) return false;
+  const n = Number(groupId.replace("S", ""));
+  return Number.isFinite(n) && n >= 6;
+}
 
 interface BandSegment {
   kind: "student" | "teacher";
@@ -26,6 +52,9 @@ export function StageSnapshot({ layout }: { layout: StageLayout }) {
   const maxSize = Math.max(1, ...rows.map((r) => r.seats.length));
   const zoneByRow = new Map(
     layout.rowSlices.map((s) => [s.rowNumber, s.groupId]),
+  );
+  const descriptorByZone = new Map(
+    layout.groups.map((g) => [g.id, g.descriptor]),
   );
   const teacherCountByRow = new Map(
     layout.teacherRows.map((t) => [t.rowNumber, t.count]),
@@ -90,7 +119,11 @@ export function StageSnapshot({ layout }: { layout: StageLayout }) {
                     darkText ? "text-white/85" : "text-slate-600"
                   }`}
                 >
-                  {zone ?? (teacherCount > 0 ? "Teachers" : "—")}
+                  {zone
+                    ? (descriptorByZone.get(zone) ?? zone)
+                    : teacherCount > 0
+                      ? "Teachers"
+                      : "—"}
                 </span>
               </div>
             </div>

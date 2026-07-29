@@ -56,8 +56,8 @@ export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
         heading: "NOW CALL",
         primary: `QUEUE ${letter}`,
         detail: span
-          ? `${group.id} — fill ${formatRowRange(span.fromRow, span.toRow)}, tallest leads`
-          : `${group.id} — move to your row`,
+          ? `${group.descriptor} — fill ${formatRowRange(span.fromRow, span.toRow)}, tallest leads`
+          : `${group.descriptor} — move to your row`,
         queueLetter: letter,
       });
     });
