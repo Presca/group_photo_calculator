@@ -64,7 +64,7 @@ describe("generateLayout", () => {
     expect(row1.seats[row1.seats.length - 1].occupant.kind).toBe("student");
   });
 
-  it("overflows teachers to the next row, interspersed between students", () => {
+  it("overflows teachers to the next row as a centred block", () => {
     const layout = generateLayout({
       ...baseConfig,
       totalStudents: 240,
@@ -82,8 +82,16 @@ describe("generateLayout", () => {
     const kinds = row2.seats.map((s) => s.occupant.kind);
     expect(kinds.filter((k) => k === "teacher")).toHaveLength(21);
     expect(kinds.filter((k) => k === "student")).toHaveLength(19);
-    // Interspersed: the row must not start with a solid teacher block.
-    expect(kinds.slice(0, 2)).toContain("student");
+    // Centred block: teachers contiguous, students only at the sides.
+    const teacherSeatNumbers = row2.seats
+      .filter((s) => s.occupant.kind === "teacher")
+      .map((s) => s.seatNumber)
+      .sort((a, b) => a - b);
+    expect(
+      teacherSeatNumbers[teacherSeatNumbers.length - 1] - teacherSeatNumbers[0],
+    ).toBe(20);
+    expect(kinds[0]).toBe("student");
+    expect(kinds[kinds.length - 1]).toBe("student");
   });
 
   it("builds one queue per row of students, with exact counts", () => {

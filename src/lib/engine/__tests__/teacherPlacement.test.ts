@@ -3,28 +3,7 @@ import {
   assignTeachersFrontFirst,
   centreOutSeatOrder,
   generateTeacherRoster,
-  interspersedSeatOrder,
 } from "../teacherPlacement";
-
-describe("interspersedSeatOrder", () => {
-  it("spaces teachers evenly between students", () => {
-    expect(interspersedSeatOrder(39, 4)).toEqual([8, 16, 24, 32]);
-  });
-
-  it("returns unique in-range seats even when crowded", () => {
-    const seats = interspersedSeatOrder(36, 23);
-    expect(new Set(seats).size).toBe(23);
-    for (const s of seats) {
-      expect(s).toBeGreaterThanOrEqual(1);
-      expect(s).toBeLessThanOrEqual(36);
-    }
-  });
-
-  it("fills the whole row when teachers equal or exceed seats", () => {
-    expect(interspersedSeatOrder(5, 5)).toEqual([1, 2, 3, 4, 5]);
-    expect(interspersedSeatOrder(3, 7)).toEqual([1, 2, 3]);
-  });
-});
 
 describe("assignTeachersFrontFirst", () => {
   const rows = [
@@ -51,7 +30,7 @@ describe("assignTeachersFrontFirst", () => {
     expect(Math.abs(vip1.seatNumber - Math.ceil(37 / 2))).toBeLessThanOrEqual(1);
   });
 
-  it("overflows to the second row, interspersed between students", () => {
+  it("overflows to the second row as a centred block, students at the sides", () => {
     const roster = generateTeacherRoster(5, 55);
     const { plans, seatsByRow, unplaced } = assignTeachersFrontFirst(
       rows,
@@ -59,12 +38,13 @@ describe("assignTeachersFrontFirst", () => {
     );
     expect(unplaced).toBe(0);
     expect(seatsByRow.get(1)).toHaveLength(37); // front row full
-    expect(seatsByRow.get(2)).toHaveLength(23); // overflow between students
     expect(seatsByRow.get(3)).toBeUndefined();
-    // Overflow seats are spread, not a contiguous block from seat 1.
+    // 23 overflow teachers form one contiguous centred block in row 2.
     const row2 = seatsByRow.get(2)!;
-    expect(row2[0]).toBeGreaterThan(1 - 1);
-    expect(new Set(row2).size).toBe(23);
+    expect(row2).toHaveLength(23);
+    expect(row2[row2.length - 1] - row2[0]).toBe(22);
+    expect(row2[0]).toBeGreaterThan(1); // students at the left side
+    expect(row2[row2.length - 1]).toBeLessThan(36); // and at the right
     expect(plans).toHaveLength(60);
   });
 

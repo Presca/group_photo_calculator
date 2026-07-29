@@ -189,8 +189,8 @@ function TeacherGuide({ layout }: { layout: StageLayout }) {
     <Sheet title="Teacher Guide" layout={layout}>
       <p className="mb-4 text-lg font-semibold text-slate-600">
         Teachers take the front row: VIPs in the centre (VIP 1 dead centre),
-        teachers outward. Overflow teachers go to the next row, spread evenly
-        between the students.
+        teachers outward. Overflow teachers go to the centre of the next row,
+        with students only at the sides.
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
         {layout.teacherRows
@@ -198,7 +198,7 @@ function TeacherGuide({ layout }: { layout: StageLayout }) {
             title:
               i === 0
                 ? `Front row — Row ${r.rowNumber} (${r.count})`
-                : `Between students — Row ${r.rowNumber} (${r.count})`,
+                : `Centred block — Row ${r.rowNumber} (${r.count})`,
             list: layout.teachers.filter((t) => t.rowNumber === r.rowNumber),
           }))
           .filter((g) => g.list.length > 0)
@@ -329,7 +329,7 @@ const CHECKLIST = [
   "Tape the row labels to the stage edge / platform steps.",
   "Brief the helping teachers: follow the Operate screen.",
   "Sort students into height zones at the queue signs.",
-  "Teachers to the front row first (principal centred); overflow teachers spread between students in the next row.",
+  "Teachers to the front row first (VIPs centred); overflow teachers to the centre of the next row.",
   "Call zones from the Operate screen, tallest first.",
   "Each row: tallest leads, fill left of centre outward, then right of centre outward.",
   "Final checks: spacing, faces visible, eyes on camera.",

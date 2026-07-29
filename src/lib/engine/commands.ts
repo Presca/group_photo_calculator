@@ -29,7 +29,7 @@ export function teacherPlacementSummary(ctx: CommandContext): string {
     summary +=
       "; " +
       overflow
-        .map((r) => `${r.count} to Row ${r.rowNumber}, spread between students`)
+        .map((r) => `${r.count} to the centre of Row ${r.rowNumber}`)
         .join("; ");
   }
   return summary;
@@ -111,7 +111,7 @@ export function buildCommandScript(ctx: CommandContext): string[] {
     }
     for (const r of overflow) {
       commands.push(
-        `Remaining ${r.count} teachers to Row ${r.rowNumber}, spread out between the students.`,
+        `Remaining ${r.count} teachers to the centre of Row ${r.rowNumber}.`,
       );
     }
     if (front.count > 0) {

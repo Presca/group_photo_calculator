@@ -41,8 +41,8 @@ interface BandSegment {
  * phone screen with no scrolling: one band per row, band width
  * proportional to the head-count, the count printed on the band.
  * Blue segments show exactly where teachers sit/stand vs students
- * (centred block in the front row, interspersed slivers in overflow
- * rows). Back (tallest) row at the top.
+ * (a centred block in every teacher row, students at the sides).
+ * Back (tallest) row at the top.
  */
 export function StageSnapshot({
   layout,

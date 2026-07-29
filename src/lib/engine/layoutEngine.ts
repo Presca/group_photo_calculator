@@ -49,8 +49,8 @@ export const DEFAULT_CONFIG: SessionConfig = {
  *
  * Set rules encoded here:
  * 1. Teachers always take the front row (VIPs centre-most, VIP 1 dead
- *    centre). Overflow spills to Row 2, Row 3, … spread evenly
- *    between students.
+ *    centre). Overflow spills to Row 2, Row 3, … always as a centred
+ *    block with students only at the two sides.
  * 2. Within every row the tallest stand in the middle, tapering to the
  *    shortest at the sides. Students file in from one queue, tallest
  *    first: fill left of centre outward, then right of centre outward
