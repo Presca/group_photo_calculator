@@ -29,65 +29,6 @@ export function WarningsBanner({ layout }: { layout: StageLayout }) {
   );
 }
 
-export function TeacherPanel({ layout }: { layout: StageLayout }) {
-  if (layout.teacherRows.length === 0) return null;
-  const [frontRow, ...overflowRows] = layout.teacherRows;
-  return (
-    <SectionCard title="Teacher Placement">
-      <p className="mb-3 text-sm text-slate-600 sm:text-base">
-        Teachers always take the front row — VIPs in the centre (VIP 1 dead
-        centre), teachers outward. Overflow teachers spread out between the
-        students in the next row(s).
-      </p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TeacherList
-          title={`Front row · Row ${frontRow.rowNumber} (${frontRow.count})`}
-          teachers={layout.teachers.filter(
-            (t) => t.rowNumber === frontRow.rowNumber,
-          )}
-        />
-        {overflowRows.map((r) => (
-          <TeacherList
-            key={r.rowNumber}
-            title={`Between students · Row ${r.rowNumber} (${r.count})`}
-            teachers={layout.teachers.filter(
-              (t) => t.rowNumber === r.rowNumber,
-            )}
-          />
-        ))}
-      </div>
-    </SectionCard>
-  );
-}
-
-function TeacherList({
-  title,
-  teachers,
-}: {
-  title: string;
-  teachers: StageLayout["teachers"];
-}) {
-  const sorted = [...teachers].sort((a, b) => a.seatNumber - b.seatNumber);
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <h3 className="mb-2 font-bold text-slate-700">{title}</h3>
-      <ol className="space-y-1 text-sm font-semibold text-slate-600">
-        {sorted.slice(0, 12).map((t) => (
-          <li key={t.id} className="flex justify-between">
-            <span className={t.role === "vip" ? "font-extrabold text-blue-700" : ""}>
-              {t.label}
-            </span>
-            <span>Seat {t.seatNumber}</span>
-          </li>
-        ))}
-        {sorted.length > 12 && (
-          <li className="text-slate-400">…and {sorted.length - 12} more</li>
-        )}
-      </ol>
-    </div>
-  );
-}
-
 export function StitchPanel({ layout }: { layout: StageLayout }) {
   const { patchConfig } = useSession();
   if (layout.config.photoMode !== "stitch" || !layout.stitch) return null;

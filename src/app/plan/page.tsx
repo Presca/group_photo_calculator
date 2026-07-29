@@ -6,7 +6,6 @@ import { StageSnapshot } from "@/components/StageSnapshot";
 import {
   LiveAdjustBar,
   StitchPanel,
-  TeacherPanel,
   WarningsBanner,
 } from "@/components/planPanels";
 import { BigButton, EmptyState, SectionCard, StatChip } from "@/components/ui";
@@ -184,7 +183,6 @@ export default function PlanPage() {
         </SectionCard>
 
         <StitchPanel layout={layout} />
-        <TeacherPanel layout={layout} />
       </div>
       <LiveAdjustBar />
     </>
