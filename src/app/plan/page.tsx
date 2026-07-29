@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { StageSnapshot } from "@/components/StageSnapshot";
 import {
   LiveAdjustBar,
@@ -13,7 +14,8 @@ import { formatRowRange } from "@/lib/engine";
 import { useSession } from "@/store/SessionContext";
 
 export default function PlanPage() {
-  const { state, layout } = useSession();
+  const { state, layout, setRowOverride, clearRowOverrides } = useSession();
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
 
   if (!state.hydrated) return null;
 
@@ -49,8 +51,83 @@ export default function PlanPage() {
 
         <WarningsBanner layout={layout} />
 
-        <SectionCard title="Stage Layout">
-          <StageSnapshot layout={layout} />
+        <SectionCard
+          title="Stage Layout"
+          action={
+            Object.keys(state.rowOverrides).length > 0 ? (
+              <button
+                className="min-h-10 rounded-xl px-3 text-sm font-bold text-slate-500 hover:bg-slate-100"
+                onClick={() => {
+                  clearRowOverrides();
+                  setSelectedRow(null);
+                }}
+              >
+                Clear pins ({Object.keys(state.rowOverrides).length})
+              </button>
+            ) : undefined
+          }
+        >
+          <StageSnapshot
+            layout={layout}
+            pinnedRows={Object.keys(state.rowOverrides).map(Number)}
+            onRowTap={(rowNumber) =>
+              setSelectedRow((prev) => (prev === rowNumber ? null : rowNumber))
+            }
+          />
+          {selectedRow !== null &&
+            (() => {
+              const row = layout.rowsResult.rows.find(
+                (r) => r.rowNumber === selectedRow,
+              );
+              if (!row) return null;
+              const isPinned = state.rowOverrides[selectedRow] !== undefined;
+              return (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-white">
+                  <span className="text-base font-bold">
+                    Row {selectedRow} · {row.size} people
+                    {isPinned && " · 📌 pinned"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      aria-label={`One fewer in row ${selectedRow}`}
+                      className="min-h-12 w-12 rounded-xl bg-white/15 text-xl font-extrabold active:bg-white/30"
+                      onClick={() =>
+                        setRowOverride(selectedRow, row.size - 1)
+                      }
+                    >
+                      −
+                    </button>
+                    <button
+                      aria-label={`One more in row ${selectedRow}`}
+                      className="min-h-12 w-12 rounded-xl bg-white/15 text-xl font-extrabold active:bg-white/30"
+                      onClick={() =>
+                        setRowOverride(selectedRow, row.size + 1)
+                      }
+                    >
+                      +
+                    </button>
+                    {isPinned && (
+                      <button
+                        className="min-h-12 rounded-xl bg-white/15 px-3 font-bold active:bg-white/30"
+                        onClick={() => setRowOverride(selectedRow, null)}
+                      >
+                        Unpin
+                      </button>
+                    )}
+                    <button
+                      className="min-h-12 rounded-xl px-2 font-bold text-white/70"
+                      onClick={() => setSelectedRow(null)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          <p className="mt-2 text-xs font-semibold text-slate-400 sm:text-sm">
+            Tap a row to pin its real count on the day — the other rows
+            rebalance automatically.
+          </p>
         </SectionCard>
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3">

@@ -114,6 +114,67 @@ describe("calculateRows", () => {
     expect(result.placed).toBe(0);
   });
 
+  it("respects pinned rows exactly and rebalances only the free rows", () => {
+    const result = calculateRows({
+      peopleCount: 300,
+      rowCount: 8,
+      maxPerRow: 40,
+      fixedSizes: { 8: 41, 6: 30 },
+    });
+    const byRow = new Map(result.rows.map((r) => [r.rowNumber, r.size]));
+    expect(byRow.get(8)).toBe(40); // 41 clamped to maxPerRow
+    expect(byRow.get(6)).toBe(30);
+    expect(result.rows.reduce((sum, r) => sum + r.size, 0)).toBe(300);
+    expect(result.warnings.join(" ")).toMatch(/clamped/i);
+    // Free rows still follow the parity pattern.
+    for (const row of result.rows) {
+      if (row.rowNumber === 8 || row.rowNumber === 6) continue;
+      if (row.parityRelaxed) continue;
+      expect(parityOf(row.size)).toBe(targetParityForRow(row.rowNumber));
+    }
+  });
+
+  it("keeps a pinned row unchanged when the totals shift", () => {
+    const before = calculateRows({
+      peopleCount: 300,
+      rowCount: 8,
+      maxPerRow: 40,
+      fixedSizes: { 8: 40 },
+    });
+    const after = calculateRows({
+      peopleCount: 301,
+      rowCount: 8,
+      maxPerRow: 40,
+      fixedSizes: { 8: 40 },
+    });
+    expect(before.rows[7].size).toBe(40);
+    expect(after.rows[7].size).toBe(40);
+    expect(after.rows.reduce((s, r) => s + r.size, 0)).toBe(301);
+  });
+
+  it("warns when pinned rows exceed the session total", () => {
+    const result = calculateRows({
+      peopleCount: 10,
+      rowCount: 3,
+      maxPerRow: 40,
+      fixedSizes: { 1: 15 },
+    });
+    expect(result.warnings.join(" ")).toMatch(/pinned/i);
+    expect(result.rows.find((r) => r.rowNumber === 1)!.size).toBe(15);
+  });
+
+  it("flags overflow when people cannot fit in the unpinned rows", () => {
+    const result = calculateRows({
+      peopleCount: 120,
+      rowCount: 3,
+      maxPerRow: 40,
+      fixedSizes: { 3: 10 },
+    });
+    // 110 remaining but only 2 free rows of 40.
+    expect(result.ok).toBe(false);
+    expect(result.suggestions.join(" ")).toMatch(/unpin/i);
+  });
+
   it("stays stable when one person is added (no reshuffle)", () => {
     for (const base of [200, 287, 344]) {
       const before = calculateRows({ peopleCount: base, rowCount: 8, maxPerRow: 40 });

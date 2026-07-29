@@ -14,6 +14,7 @@ import {
 } from "./teacherPlacement";
 import type {
   RowLabel,
+  RowOverrides,
   RowPlan,
   Seat,
   SeatRow,
@@ -50,8 +51,16 @@ export const DEFAULT_CONFIG: SessionConfig = {
  *    first: fill left of centre outward, then right of centre outward
  *    — nobody is split off once queued.
  * 3. The front row is always odd, the second even, alternating back.
+ *
+ * `rowOverrides` are live on-the-day pins: when the operators squeeze
+ * more or fewer people into a row than planned, that row is fixed at
+ * its actual count and only the remaining rows rebalance — rows
+ * already filled never move.
  */
-export function generateLayout(config: SessionConfig): StageLayout {
+export function generateLayout(
+  config: SessionConfig,
+  rowOverrides: RowOverrides = {},
+): StageLayout {
   const warnings: string[] = [];
   const suggestions: string[] = [];
 
@@ -63,6 +72,7 @@ export function generateLayout(config: SessionConfig): StageLayout {
     peopleCount: totalPeople,
     rowCount: config.standingRows,
     maxPerRow,
+    fixedSizes: rowOverrides,
   });
   warnings.push(...rowsResult.warnings);
   suggestions.push(...rowsResult.suggestions);

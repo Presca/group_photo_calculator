@@ -10,7 +10,7 @@ import { useSession } from "@/store/SessionContext";
  * Helpers just follow the screen — no verbal instructions needed.
  */
 export default function OperatePage() {
-  const { state, layout } = useSession();
+  const { state, layout, setRowOverride } = useSession();
   const [index, setIndex] = useState(0);
 
   if (!state.hydrated) return null;
@@ -59,6 +59,21 @@ export default function OperatePage() {
         <div className="max-w-2xl px-4 text-2xl font-extrabold text-slate-700 sm:px-6 sm:text-3xl">
           {step.detail}
         </div>
+        {step.rowNumber !== undefined && (
+          <RowConfirm
+            rowNumber={step.rowNumber}
+            size={
+              layout.rowsResult.rows.find(
+                (r) => r.rowNumber === step.rowNumber,
+              )?.size ?? 0
+            }
+            pinned={state.rowOverrides[step.rowNumber] !== undefined}
+            onAdjust={(delta, current) =>
+              setRowOverride(step.rowNumber!, current + delta)
+            }
+            onUnpin={() => setRowOverride(step.rowNumber!, null)}
+          />
+        )}
         {next && (
           <div className="mt-8 text-xl font-bold text-slate-400">
             Next: {next.primary}
@@ -91,6 +106,78 @@ export default function OperatePage() {
           >
             Restart
           </BigButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Live count confirmation: when a row takes more or fewer people than
+ * planned, one tap pins it at the actual number and every remaining
+ * queue rebalances instantly. Rows already filled never move.
+ */
+function RowConfirm({
+  rowNumber,
+  size,
+  pinned,
+  onAdjust,
+  onUnpin,
+}: {
+  rowNumber: number;
+  size: number;
+  pinned: boolean;
+  onAdjust: (delta: number, current: number) => void;
+  onUnpin: () => void;
+}) {
+  return (
+    <div className="mt-8 w-full max-w-md px-4">
+      <div className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-400">
+        Row {rowNumber} actual count{pinned && " · pinned"}
+      </div>
+      <div className="flex items-stretch justify-center gap-2">
+        <button
+          aria-label={`Row ${rowNumber} took two fewer`}
+          className="min-h-14 flex-1 rounded-2xl border-2 border-slate-300 text-xl font-extrabold text-slate-700 active:bg-slate-100"
+          onClick={() => onAdjust(-2, size)}
+        >
+          −2
+        </button>
+        <button
+          aria-label={`Row ${rowNumber} took one fewer`}
+          className="min-h-14 flex-1 rounded-2xl border-2 border-slate-300 text-xl font-extrabold text-slate-700 active:bg-slate-100"
+          onClick={() => onAdjust(-1, size)}
+        >
+          −1
+        </button>
+        <div
+          className={`flex min-h-14 flex-1 items-center justify-center rounded-2xl text-2xl font-black tabular-nums ${
+            pinned ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
+          }`}
+        >
+          {size}
+        </div>
+        <button
+          aria-label={`Row ${rowNumber} took one more`}
+          className="min-h-14 flex-1 rounded-2xl border-2 border-slate-300 text-xl font-extrabold text-slate-700 active:bg-slate-100"
+          onClick={() => onAdjust(1, size)}
+        >
+          +1
+        </button>
+        <button
+          aria-label={`Row ${rowNumber} took two more`}
+          className="min-h-14 flex-1 rounded-2xl border-2 border-slate-300 text-xl font-extrabold text-slate-700 active:bg-slate-100"
+          onClick={() => onAdjust(2, size)}
+        >
+          +2
+        </button>
+      </div>
+      <div className="mt-2 flex items-center justify-between text-sm font-semibold text-slate-400">
+        <span>Later queues rebalance automatically</span>
+        {pinned && (
+          <button className="font-bold text-blue-700" onClick={onUnpin}>
+            Unpin
+          </button>
         )}
       </div>
     </div>

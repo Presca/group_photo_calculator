@@ -59,6 +59,8 @@ export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
           ? `${group.descriptor} — fill ${formatRowRange(span.fromRow, span.toRow)}, tallest leads`
           : `${group.descriptor} — move to your row`,
         queueLetter: letter,
+        rowNumber:
+          span && span.fromRow === span.toRow ? span.fromRow : undefined,
       });
     });
 

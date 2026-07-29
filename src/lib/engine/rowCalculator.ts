@@ -25,35 +25,37 @@ export interface CalculateRowsInput {
   peopleCount: number;
   rowCount: number;
   maxPerRow: number;
+  /**
+   * rowNumber → pinned size. Live on-the-day overrides: pinned rows
+   * keep exactly this many people (reality wins over parity) and only
+   * the remaining rows are rebalanced.
+   */
+  fixedSizes?: Record<number, number>;
 }
 
 /**
  * Distribute people across rows.
  *
- * The sizes are constructed directly with the correct parity: every
- * odd-target row is seeded with 1 person, and the remaining people are
- * dealt out in pairs (pairs never change a row's parity), remainder
- * pairs going to the back rows so the back is fullest. When the total
- * makes the full odd/even pattern arithmetically impossible, exactly
- * one person is absorbed by the back row and that row is flagged as
- * relaxed.
+ * Sizes are constructed directly with the correct parity: every
+ * odd-target row is seeded with 1 person and the rest are dealt out in
+ * pairs (pairs never change parity), remainder pairs going to the back
+ * rows so the back is fullest. When the total makes the pattern
+ * arithmetically impossible, exactly one person is absorbed by the
+ * back row and that row is flagged as relaxed.
  *
  * Because the construction is a closed formula rather than an
  * iterative shuffle, changing the head-count by 1 or 2 only nudges one
  * or two rows — which is what keeps live adjustments stable on the day.
  *
- * Guarantees (verified by unit tests):
- * - Every placed person is in exactly one row.
- * - No row exceeds `maxPerRow`; no used row is empty.
- * - Row sizes are balanced with the back rows fullest.
- * - All rows match their target parity except at most one relaxed row,
- *   unless the stage is at/over physical capacity (then physical
- *   limits win and relaxations are warned about).
+ * With `fixedSizes` (live pins), pinned rows are untouchable: the
+ * remaining people are distributed across the unpinned rows with the
+ * same rules.
  */
 export function calculateRows({
   peopleCount,
   rowCount,
   maxPerRow,
+  fixedSizes,
 }: CalculateRowsInput): RowCalculationResult {
   const warnings: string[] = [];
   const suggestions: string[] = [];
@@ -96,36 +98,215 @@ export function calculateRows({
     suggestions.push("Or switch to multi-shot stitching.");
   }
 
-  const rowsUsed = Math.min(rowCount, placed);
-  if (rowsUsed < rowCount) {
+  const fixed = sanitizeFixed(fixedSizes, rowCount, maxPerRow, warnings);
+
+  if (fixed.size === 0) {
+    const rowsUsed = Math.min(rowCount, placed);
+    if (rowsUsed < rowCount) {
+      warnings.push(
+        `Only ${rowsUsed} of ${rowCount} rows are needed for this group size.`,
+      );
+    }
+    const rowNumbers = Array.from({ length: rowsUsed }, (_, i) => i + 1);
+    const { sizes, capacityParityBroken } = distribute(
+      placed,
+      rowNumbers,
+      maxPerRow,
+    );
+    if (capacityParityBroken) {
+      warnings.push("Row parities were relaxed to stay within stage capacity.");
+    }
+    return buildResult({
+      rowNumbers,
+      sizes,
+      ok,
+      maxPerRow,
+      capacity,
+      peopleCount,
+      warnings,
+      suggestions,
+    });
+  }
+
+  // --- Live pins present: pinned rows are fixed, the rest rebalance. ---
+  const fixedSum = [...fixed.values()].reduce((a, b) => a + b, 0);
+  let remaining = placed - fixedSum;
+  if (remaining < 0) {
     warnings.push(
-      `Only ${rowsUsed} of ${rowCount} rows are needed for this group size.`,
+      `Pinned rows hold ${fixedSum} people but the session only has ${placed} — update the totals or unpin a row.`,
+    );
+    remaining = 0;
+  }
+
+  const freeRowNumbers: number[] = [];
+  for (let r = 1; r <= rowCount; r++) {
+    if (!fixed.has(r)) freeRowNumbers.push(r);
+  }
+  const freeCapacity = freeRowNumbers.length * maxPerRow;
+  if (remaining > freeCapacity) {
+    ok = false;
+    warnings.push(
+      `${remaining - freeCapacity} people do not fit in the unpinned rows.`,
+    );
+    suggestions.push("Unpin a row, add another row, or switch to stitching.");
+    remaining = freeCapacity;
+  }
+
+  const { sizes: freeSizes, capacityParityBroken } = distribute(
+    remaining,
+    freeRowNumbers,
+    maxPerRow,
+  );
+  if (capacityParityBroken) {
+    warnings.push("Row parities were relaxed to stay within stage capacity.");
+  }
+
+  const rowNumbers = Array.from({ length: rowCount }, (_, i) => i + 1);
+  const freeSizeByRow = new Map(freeRowNumbers.map((r, i) => [r, freeSizes[i]]));
+  const sizes = rowNumbers.map(
+    (r) => fixed.get(r) ?? freeSizeByRow.get(r) ?? 0,
+  );
+
+  return buildResult({
+    rowNumbers,
+    sizes,
+    ok,
+    maxPerRow,
+    capacity,
+    peopleCount,
+    warnings,
+    suggestions,
+  });
+}
+
+function sanitizeFixed(
+  fixedSizes: Record<number, number> | undefined,
+  rowCount: number,
+  maxPerRow: number,
+  warnings: string[],
+): Map<number, number> {
+  const fixed = new Map<number, number>();
+  if (!fixedSizes) return fixed;
+  for (const [key, value] of Object.entries(fixedSizes)) {
+    const rowNumber = Number(key);
+    if (
+      !Number.isInteger(rowNumber) ||
+      rowNumber < 1 ||
+      rowNumber > rowCount ||
+      !Number.isFinite(value)
+    ) {
+      continue;
+    }
+    const size = Math.round(value);
+    if (size > maxPerRow) {
+      warnings.push(
+        `Row ${rowNumber} is pinned at ${size} but the stage fits ${maxPerRow} per row — clamped.`,
+      );
+    }
+    fixed.set(rowNumber, Math.min(maxPerRow, Math.max(1, size)));
+  }
+  return fixed;
+}
+
+interface BuildResultInput {
+  rowNumbers: number[];
+  sizes: number[];
+  ok: boolean;
+  maxPerRow: number;
+  capacity: number;
+  peopleCount: number;
+  warnings: string[];
+  suggestions: string[];
+}
+
+function buildResult({
+  rowNumbers,
+  sizes,
+  ok,
+  maxPerRow,
+  capacity,
+  peopleCount,
+  warnings,
+  suggestions,
+}: BuildResultInput): RowCalculationResult {
+  const rows: RowPlan[] = rowNumbers.map((rowNumber, i) => {
+    const size = sizes[i];
+    const targetParity = targetParityForRow(rowNumber);
+    const actualParity = parityOf(size);
+    return {
+      rowNumber,
+      size,
+      targetParity,
+      actualParity,
+      parityRelaxed: actualParity !== targetParity,
+    };
+  });
+
+  const relaxed = rows.filter((r) => r.parityRelaxed);
+  if (relaxed.length > 0) {
+    warnings.push(
+      `Row ${relaxed.map((r) => r.rowNumber).join(", ")} could not match the odd/even pattern with these totals (one row must absorb the difference).`,
     );
   }
 
+  const placed = sizes.reduce((a, b) => a + b, 0);
+  return {
+    ok,
+    rows,
+    maxPerRow,
+    capacity,
+    placed,
+    overflow: peopleCount - placed,
+    warnings,
+    suggestions,
+  };
+}
+
+/**
+ * Core parity-correct distribution over an ordered set of rows (front
+ * first). Each row's target parity comes from its real row number, so
+ * this works for the full stage and for the "free rows only" subset
+ * used when live pins are active.
+ */
+function distribute(
+  count: number,
+  rowNumbers: number[],
+  maxPerRow: number,
+): { sizes: number[]; capacityParityBroken: boolean } {
+  const n = rowNumbers.length;
+  const sizes: number[] = new Array(n).fill(0);
+  if (n === 0 || count <= 0) return { sizes, capacityParityBroken: false };
+
+  if (count < n) {
+    // Not enough people to fill every row: back rows get one each.
+    for (let i = 0; i < count; i++) sizes[n - 1 - i] = 1;
+    return { sizes, capacityParityBroken: false };
+  }
+
   // Seed odd-target rows with 1, then deal the rest out in pairs.
-  const oddRowCount = Math.ceil(rowsUsed / 2);
-  const pool = placed - oddRowCount; // rowsUsed <= placed, so pool >= 0
+  const oddRowCount = rowNumbers.filter(
+    (r) => targetParityForRow(r) === "odd",
+  ).length;
+  const pool = count - oddRowCount;
   const pairs = Math.floor(pool / 2);
   const leftover = pool % 2;
 
-  const basePairs = Math.floor(pairs / rowsUsed);
-  const extraPairs = pairs % rowsUsed;
-  const sizes: number[] = new Array(rowsUsed);
-  for (let i = 0; i < rowsUsed; i++) {
-    const seed = targetParityForRow(i + 1) === "odd" ? 1 : 0;
+  const basePairs = Math.floor(pairs / n);
+  const extraPairs = pairs % n;
+  for (let i = 0; i < n; i++) {
+    const seed = targetParityForRow(rowNumbers[i]) === "odd" ? 1 : 0;
     // Remainder pairs go to the back rows.
-    const extra = i >= rowsUsed - extraPairs ? 1 : 0;
+    const extra = i >= n - extraPairs ? 1 : 0;
     sizes[i] = 2 * (basePairs + extra) + seed;
   }
   // When the total's parity cannot match the pattern, the back row
   // absorbs the odd person out.
-  sizes[rowsUsed - 1] += leftover;
+  sizes[n - 1] += leftover;
 
   // Enforce the per-row maximum. Moves of 2 preserve parity; a move of
   // 1 is the last resort when the stage is nearly full.
-  let parityBroken = false;
-  for (let i = rowsUsed - 1; i >= 0; i--) {
+  let capacityParityBroken = false;
+  for (let i = n - 1; i >= 0; i--) {
     let guard = 0;
     while (sizes[i] > maxPerRow && guard++ < 10000) {
       const pairTarget = findRowWithRoom(sizes, maxPerRow, i, 2);
@@ -138,15 +319,12 @@ export function calculateRows({
       if (singleTarget === -1) break;
       sizes[i] -= 1;
       sizes[singleTarget] += 1;
-      parityBroken = true;
+      capacityParityBroken = true;
     }
-  }
-  if (parityBroken) {
-    warnings.push("Row parities were relaxed to stay within stage capacity.");
   }
 
   // No used row may be empty (only possible with very small groups).
-  for (let i = 0; i < rowsUsed; i++) {
+  for (let i = 0; i < n; i++) {
     let guard = 0;
     while (sizes[i] < 1 && guard++ < 10000) {
       const donor = findDonorRow(sizes, i, 3);
@@ -168,7 +346,7 @@ export function calculateRows({
   let guard = 0;
   while (moved && guard++ < 1000) {
     moved = false;
-    for (let i = 0; i < rowsUsed - 1; i++) {
+    for (let i = 0; i < n - 1; i++) {
       while (
         sizes[i] - sizes[i + 1] >= 2 &&
         sizes[i + 1] + 2 <= maxPerRow &&
@@ -181,36 +359,7 @@ export function calculateRows({
     }
   }
 
-  const rows: RowPlan[] = sizes.map((size, i) => {
-    const rowNumber = i + 1;
-    const targetParity = targetParityForRow(rowNumber);
-    const actualParity = parityOf(size);
-    return {
-      rowNumber,
-      size,
-      targetParity,
-      actualParity,
-      parityRelaxed: actualParity !== targetParity,
-    };
-  });
-
-  const relaxed = rows.filter((r) => r.parityRelaxed);
-  if (relaxed.length > 0) {
-    warnings.push(
-      `Row ${relaxed.map((r) => r.rowNumber).join(", ")} could not match the odd/even pattern with these totals (one row must absorb the difference).`,
-    );
-  }
-
-  return {
-    ok,
-    rows,
-    maxPerRow,
-    capacity,
-    placed,
-    overflow: peopleCount - placed,
-    warnings,
-    suggestions,
-  };
+  return { sizes, capacityParityBroken };
 }
 
 /** Back-most row (other than `exclude`) with at least `room` free seats. */

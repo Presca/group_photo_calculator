@@ -79,6 +79,23 @@ describe("generateLayout", () => {
     expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(280);
   });
 
+  it("pins a row live and rebalances the remaining queues", () => {
+    const plain = generateLayout(baseConfig);
+    const row8Planned = plain.rowsResult.rows.find((r) => r.rowNumber === 8)!
+      .size;
+    const pinned = generateLayout(baseConfig, { 8: row8Planned + 2 });
+    const row8 = pinned.rowsResult.rows.find((r) => r.rowNumber === 8)!;
+    expect(row8.size).toBe(row8Planned + 2);
+    // Everyone still placed exactly once.
+    expect(pinned.rowsResult.rows.reduce((s, r) => s + r.size, 0)).toBe(300);
+    // Queue counts follow the new row sizes.
+    expect(pinned.queues[0].count).toBe(row8Planned + 2);
+    expect(pinned.queues.reduce((s, q) => s + q.count, 0)).toBe(280);
+    // Operate steps carry the row number for live confirmation.
+    const queueSteps = pinned.steps.filter((s) => s.queueLetter);
+    expect(queueSteps.every((s) => s.rowNumber !== undefined)).toBe(true);
+  });
+
   it("keeps the front row odd and the second even (set rule 3)", () => {
     const layout = generateLayout(baseConfig);
     expect(layout.rowsResult.rows[0].size % 2).toBe(1);

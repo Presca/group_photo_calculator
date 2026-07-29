@@ -138,10 +138,15 @@ export interface OperationStep {
   heading: string;
   /** The big central text, e.g. "QUEUE A". */
   primary: string;
-  /** Instruction, e.g. "S8 — fill Row 8". */
+  /** Instruction, e.g. "Tallest — fill Row 8". */
   detail: string;
   queueLetter?: string;
+  /** Row this step fills — enables live count confirmation. */
+  rowNumber?: number;
 }
+
+/** rowNumber → pinned size for live on-the-day adjustments. */
+export type RowOverrides = Record<number, number>;
 
 export interface RowLabel {
   rowNumber: number;

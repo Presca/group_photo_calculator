@@ -44,11 +44,22 @@ interface BandSegment {
  * (centred block in the front row, interspersed slivers in overflow
  * rows). Back (tallest) row at the top.
  */
-export function StageSnapshot({ layout }: { layout: StageLayout }) {
+export function StageSnapshot({
+  layout,
+  pinnedRows,
+  onRowTap,
+}: {
+  layout: StageLayout;
+  /** Rows pinned at an on-the-day count (shown with a pin marker). */
+  pinnedRows?: number[];
+  /** Makes bands tappable (used for pinning a row's actual count). */
+  onRowTap?: (rowNumber: number) => void;
+}) {
   const rows = useMemo(
     () => [...layout.seatRows].sort((a, b) => b.rowNumber - a.rowNumber),
     [layout],
   );
+  const pinned = new Set(pinnedRows ?? []);
   const maxSize = Math.max(1, ...rows.map((r) => r.seats.length));
   const zoneByRow = new Map(
     layout.rowSlices.map((s) => [s.rowNumber, s.groupId]),
@@ -78,11 +89,15 @@ export function StageSnapshot({ layout }: { layout: StageLayout }) {
               ? `${teacherCount}T + ${studentCount}S`
               : `${teacherCount}T`
             : `${size}`;
+        const isPinned = pinned.has(row.rowNumber);
         return (
           <div key={row.rowNumber} className="flex justify-center">
             <div
-              className="relative h-11 min-w-0 overflow-hidden rounded-xl"
+              className={`relative h-11 min-w-0 overflow-hidden rounded-xl ${
+                onRowTap ? "cursor-pointer active:opacity-80" : ""
+              } ${isPinned ? "ring-2 ring-slate-900" : ""}`}
               style={{ width: `${Math.max(42, (size / maxSize) * 100)}%` }}
+              onClick={onRowTap ? () => onRowTap(row.rowNumber) : undefined}
             >
               {/* Seat segments: grey students, blue teachers */}
               <div className="absolute inset-0 flex">
@@ -103,7 +118,7 @@ export function StageSnapshot({ layout }: { layout: StageLayout }) {
                 }`}
               >
                 <span className="whitespace-nowrap text-sm font-extrabold drop-shadow-sm">
-                  Row {row.rowNumber}
+                  {isPinned && "📌 "}Row {row.rowNumber}
                 </span>
                 <span
                   className={`whitespace-nowrap font-black tabular-nums leading-none drop-shadow-sm ${

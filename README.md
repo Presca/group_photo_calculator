@@ -33,7 +33,8 @@ npm run build    # production build
 | **Queue Planner** | One printable sign per queue: Queue A → Row 8 → 38 students (Tallest), etc. |
 | **Row Labels** | Huge printable labels (ROW 8 / Tallest). Export via print-to-PDF. |
 | **Operation Mode** | Full-screen "NOW CALL QUEUE A → fill Row 8" steps with giant Next/Back buttons; helpers just follow the screen. |
-| **Adjust Live** | +/− student/teacher buttons; the plan is a deterministic function of the counts, so ±1 nudges one or two rows instead of reshuffling (manual swaps are preserved where still valid). |
+| **Adjust Live** | +/− student/teacher buttons; the plan is a deterministic function of the counts, so ±1 nudges one or two rows instead of reshuffling. |
+| **Live row pins** | On-the-day flexibility: confirm each row's *actual* count in Operate mode (−2/−1/+1/+2) or tap a band on the Plan screen. The pinned row is fixed at reality and only the not-yet-filled rows rebalance — rows already on stage never move. |
 | **Stage Width Calculator** | Max people per row from stage/shoulder width; warns when impossible and offers one-tap fixes (add rows or switch to stitching). |
 | **Stitch Planner** | Divides rows into photo groups (Photo A: Rows 8–6 …) with configurable rows-per-photo and overlap. |
 | **Command Screen** | The exact phrases to read aloud, one at a time, in arrangement order. |

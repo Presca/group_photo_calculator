@@ -12,6 +12,7 @@ import {
   applySeatSwaps,
   DEFAULT_CONFIG,
   generateLayout,
+  type RowOverrides,
   type SeatSwap,
   type SessionConfig,
   type StageLayout,
@@ -22,6 +23,8 @@ const STORAGE_KEY = "gpp:session:v1";
 export interface SessionState {
   config: SessionConfig;
   swaps: SeatSwap[];
+  /** Live pinned row sizes (on-the-day deviations from the plan). */
+  rowOverrides: RowOverrides;
   generated: boolean;
   hydrated: boolean;
 }
@@ -32,12 +35,15 @@ type Action =
   | { type: "adjustCount"; field: "totalStudents" | "totalTeachers"; delta: number }
   | { type: "addSwap"; swap: SeatSwap }
   | { type: "clearSwaps" }
+  | { type: "setRowOverride"; rowNumber: number; size: number | null }
+  | { type: "clearRowOverrides" }
   | { type: "markGenerated" }
   | { type: "reset" };
 
 const initialState: SessionState = {
   config: DEFAULT_CONFIG,
   swaps: [],
+  rowOverrides: {},
   generated: false,
   hydrated: false,
 };
@@ -64,6 +70,17 @@ function reducer(state: SessionState, action: Action): SessionState {
       return { ...state, swaps: [...state.swaps, action.swap] };
     case "clearSwaps":
       return { ...state, swaps: [] };
+    case "setRowOverride": {
+      const rowOverrides = { ...state.rowOverrides };
+      if (action.size === null) {
+        delete rowOverrides[action.rowNumber];
+      } else {
+        rowOverrides[action.rowNumber] = Math.max(1, Math.round(action.size));
+      }
+      return { ...state, rowOverrides };
+    }
+    case "clearRowOverrides":
+      return { ...state, rowOverrides: {} };
     case "markGenerated":
       return { ...state, generated: true };
     case "reset":
@@ -76,12 +93,15 @@ function reducer(state: SessionState, action: Action): SessionState {
 interface SessionContextValue {
   state: SessionState;
   layout: StageLayout;
-  /** seatRows with manual drag-and-drop swaps applied. */
+  /** seatRows with manual swaps applied (extension point for AI fixes). */
   seatRows: StageLayout["seatRows"];
   patchConfig(patch: Partial<SessionConfig>): void;
   adjustCount(field: "totalStudents" | "totalTeachers", delta: number): void;
   addSwap(swap: SeatSwap): void;
   clearSwaps(): void;
+  /** Pin a row at its actual on-the-day size; null unpins it. */
+  setRowOverride(rowNumber: number, size: number | null): void;
+  clearRowOverrides(): void;
   markGenerated(): void;
   reset(): void;
 }
@@ -101,6 +121,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           state: {
             config: parsed.config,
             swaps: Array.isArray(parsed.swaps) ? parsed.swaps : [],
+            rowOverrides:
+              parsed.rowOverrides && typeof parsed.rowOverrides === "object"
+                ? parsed.rowOverrides
+                : {},
             generated: Boolean(parsed.generated),
           },
         });
@@ -120,6 +144,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         JSON.stringify({
           config: state.config,
           swaps: state.swaps,
+          rowOverrides: state.rowOverrides,
           generated: state.generated,
         }),
       );
@@ -128,7 +153,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [state]);
 
-  const layout = useMemo(() => generateLayout(state.config), [state.config]);
+  const layout = useMemo(
+    () => generateLayout(state.config, state.rowOverrides),
+    [state.config, state.rowOverrides],
+  );
   const seatRows = useMemo(
     () => applySeatSwaps(layout.seatRows, state.swaps),
     [layout, state.swaps],
@@ -144,6 +172,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "adjustCount", field, delta }),
       addSwap: (swap) => dispatch({ type: "addSwap", swap }),
       clearSwaps: () => dispatch({ type: "clearSwaps" }),
+      setRowOverride: (rowNumber, size) =>
+        dispatch({ type: "setRowOverride", rowNumber, size }),
+      clearRowOverrides: () => dispatch({ type: "clearRowOverrides" }),
       markGenerated: () => dispatch({ type: "markGenerated" }),
       reset: () => {
         try {
