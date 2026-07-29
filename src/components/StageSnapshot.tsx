@@ -37,9 +37,18 @@ export function StageSnapshot({ layout }: { layout: StageLayout }) {
         const size = row.seats.length;
         const zone = zoneByRow.get(row.rowNumber);
         const teacherCount = teacherCountByRow.get(row.rowNumber) ?? 0;
+        const studentCount = size - teacherCount;
         const segments = buildSegments(row.seats, zone);
         const mostlyTeachers = teacherCount > size / 2;
         const darkText = mostlyTeachers || zoneIsDark(zone);
+        // Mixed rows spell out the split so the count is never mistaken
+        // for "37 teachers": e.g. "30T + 7S".
+        const centreLabel =
+          teacherCount > 0
+            ? studentCount > 0
+              ? `${teacherCount}T + ${studentCount}S`
+              : `${teacherCount}T`
+            : `${size}`;
         return (
           <div key={row.rowNumber} className="flex justify-center">
             <div
@@ -67,19 +76,21 @@ export function StageSnapshot({ layout }: { layout: StageLayout }) {
                 <span className="whitespace-nowrap text-sm font-extrabold drop-shadow-sm">
                   Row {row.rowNumber}
                 </span>
-                <span className="text-xl font-black tabular-nums leading-none drop-shadow-sm">
-                  {size}
+                <span
+                  className={`whitespace-nowrap font-black tabular-nums leading-none drop-shadow-sm ${
+                    teacherCount > 0 && studentCount > 0
+                      ? "text-base sm:text-xl"
+                      : "text-xl"
+                  }`}
+                >
+                  {centreLabel}
                 </span>
                 <span
                   className={`whitespace-nowrap text-xs font-bold ${
                     darkText ? "text-white/85" : "text-slate-600"
                   }`}
                 >
-                  {teacherCount > 0
-                    ? zone
-                      ? `${zone} +${teacherCount}T`
-                      : `${teacherCount} teachers`
-                    : (zone ?? "—")}
+                  {zone ?? (teacherCount > 0 ? "Teachers" : "—")}
                 </span>
               </div>
             </div>
