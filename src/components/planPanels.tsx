@@ -1,0 +1,287 @@
+"use client";
+
+import { formatRowRange, type StageLayout } from "@/lib/engine";
+import { useSession } from "@/store/SessionContext";
+import { BigButton, SectionCard, SegmentedControl, NumberStepper } from "./ui";
+
+export function WarningsBanner({ layout }: { layout: StageLayout }) {
+  const { patchConfig } = useSession();
+  if (layout.warnings.length === 0) return null;
+  return (
+    <div className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-5">
+      <h2 className="text-lg font-bold text-amber-900">Check these</h2>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-900">
+        {layout.warnings.map((w) => (
+          <li key={w}>{w}</li>
+        ))}
+      </ul>
+      {!layout.rowsResult.ok && (
+        <div className="mt-4 flex flex-wrap gap-3">
+          <BigButton
+            variant="secondary"
+            onClick={() =>
+              patchConfig({
+                standingRows: Math.max(
+                  layout.config.standingRows,
+                  Math.ceil(
+                    (layout.config.totalStudents + layout.standingTeacherCount) /
+                      Math.max(1, layout.maxPerRow),
+                  ),
+                ),
+              })
+            }
+          >
+            Add rows to fit
+          </BigButton>
+          {layout.config.photoMode === "single" && (
+            <BigButton
+              variant="secondary"
+              onClick={() => patchConfig({ photoMode: "stitch" })}
+            >
+              Use stitched photos
+            </BigButton>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function RowBreakdown({ layout }: { layout: StageLayout }) {
+  const rowsBackFirst = [...layout.rowsResult.rows].sort(
+    (a, b) => b.rowNumber - a.rowNumber,
+  );
+  return (
+    <SectionCard title="Rows">
+      <div className="grid gap-2">
+        {rowsBackFirst.map((row) => {
+          const slices = layout.rowSlices.filter(
+            (s) => s.rowNumber === row.rowNumber,
+          );
+          return (
+            <div
+              key={row.rowNumber}
+              className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
+            >
+              <div>
+                <div className="text-xl font-extrabold">
+                  Row {row.rowNumber}
+                </div>
+                <div className="text-sm font-semibold text-slate-500">
+                  {slices.map((s) => s.groupId).join(" · ") || "—"}
+                  {row.parityRelaxed && " · parity relaxed"}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-extrabold tabular-nums">
+                  {row.size}
+                </div>
+                <div className="text-xs font-semibold uppercase text-slate-400">
+                  people
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {layout.seatedTeacherCount > 0 && (
+          <div className="flex items-center justify-between rounded-2xl bg-blue-50 px-4 py-3">
+            <div>
+              <div className="text-xl font-extrabold text-blue-900">
+                Seated row
+              </div>
+              <div className="text-sm font-semibold text-blue-700">
+                Teachers · principal centred
+              </div>
+            </div>
+            <div className="text-2xl font-extrabold tabular-nums text-blue-900">
+              {layout.seatedTeacherCount}
+            </div>
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+export function HeightGroupsPanel({ layout }: { layout: StageLayout }) {
+  const { patchConfig } = useSession();
+  const spanByGroup = new Map(layout.groupSpans.map((s) => [s.groupId, s]));
+  return (
+    <SectionCard
+      title="Height Groups"
+      action={
+        <SegmentedControl
+          label=""
+          value={String(layout.config.heightGroupCount) as "5" | "7" | "9"}
+          options={[
+            { value: "5", label: "5" },
+            { value: "7", label: "7" },
+            { value: "9", label: "9" },
+          ]}
+          onChange={(v) =>
+            patchConfig({ heightGroupCount: Number(v) as 5 | 7 | 9 })
+          }
+        />
+      }
+    >
+      <div className="grid gap-2">
+        {layout.groups.map((group) => {
+          const span = spanByGroup.get(group.id);
+          return (
+            <div
+              key={group.id}
+              className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-11 w-14 items-center justify-center rounded-xl bg-slate-800 text-lg font-extrabold text-white">
+                  {group.id}
+                </span>
+                <div>
+                  <div className="font-bold">{group.descriptor}</div>
+                  <div className="text-sm font-semibold text-slate-500">
+                    {span && span.fromRow > 0
+                      ? formatRowRange(span.fromRow, span.toRow)
+                      : "Not placed"}
+                  </div>
+                </div>
+              </div>
+              <div className="text-2xl font-extrabold tabular-nums">
+                {group.count}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
+export function TeacherPanel({ layout }: { layout: StageLayout }) {
+  const seated = layout.teachers.filter((t) => t.placement === "seated");
+  const standing = layout.teachers.filter((t) => t.placement === "standing");
+  return (
+    <SectionCard title="Teacher Placement">
+      <p className="mb-3 text-slate-600">
+        Principal centred, senior staff nearest the centre, others outward
+        symmetrically. Drag seats on the stage view to fine-tune.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {seated.length > 0 && (
+          <TeacherList title={`Seated row (${seated.length})`} teachers={seated} />
+        )}
+        {standing.length > 0 && (
+          <TeacherList
+            title={`Standing · Row ${standing[0]?.rowNumber} (${standing.length})`}
+            teachers={standing}
+          />
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+function TeacherList({
+  title,
+  teachers,
+}: {
+  title: string;
+  teachers: StageLayout["teachers"];
+}) {
+  const sorted = [...teachers].sort((a, b) => a.seatNumber - b.seatNumber);
+  return (
+    <div className="rounded-2xl bg-slate-50 p-4">
+      <h3 className="mb-2 font-bold text-slate-700">{title}</h3>
+      <ol className="space-y-1 text-sm font-semibold text-slate-600">
+        {sorted.slice(0, 12).map((t) => (
+          <li key={t.id} className="flex justify-between">
+            <span className={t.role === "principal" ? "text-blue-700" : ""}>
+              {t.label}
+            </span>
+            <span>Seat {t.seatNumber}</span>
+          </li>
+        ))}
+        {sorted.length > 12 && (
+          <li className="text-slate-400">…and {sorted.length - 12} more</li>
+        )}
+      </ol>
+    </div>
+  );
+}
+
+export function StitchPanel({ layout }: { layout: StageLayout }) {
+  const { patchConfig } = useSession();
+  if (layout.config.photoMode !== "stitch" || !layout.stitch) return null;
+  return (
+    <SectionCard title="Stitch Planner">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+        <NumberStepper
+          label="Rows per photo"
+          value={layout.config.stitchRowsPerPhoto}
+          min={1}
+          max={6}
+          onChange={(v) => patchConfig({ stitchRowsPerPhoto: Math.round(v) })}
+        />
+        <NumberStepper
+          label="Overlap rows"
+          value={layout.config.stitchOverlapRows}
+          min={0}
+          max={3}
+          onChange={(v) => patchConfig({ stitchOverlapRows: Math.round(v) })}
+        />
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {layout.stitch.map((photo) => (
+          <div
+            key={photo.label}
+            className="rounded-2xl border-2 border-slate-200 bg-slate-50 p-4 text-center"
+          >
+            <div className="text-lg font-extrabold">{photo.label}</div>
+            <div className="text-2xl font-extrabold text-blue-700">
+              {formatRowRange(photo.fromRow, photo.toRow)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+export function LiveAdjustBar() {
+  const { state, adjustCount } = useSession();
+  const items: {
+    label: string;
+    field: "totalStudents" | "totalTeachers";
+    delta: number;
+  }[] = [
+    { label: "− Student", field: "totalStudents", delta: -1 },
+    { label: "+ Student", field: "totalStudents", delta: 1 },
+    { label: "− Teacher", field: "totalTeachers", delta: -1 },
+    { label: "+ Teacher", field: "totalTeachers", delta: 1 },
+  ];
+  return (
+    <div className="no-print sticky bottom-0 z-30 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center gap-2">
+        <div className="hidden shrink-0 pr-2 text-sm font-bold uppercase tracking-wide text-slate-500 sm:block">
+          Adjust live
+        </div>
+        {items.map((item) => (
+          <button
+            key={item.label}
+            className="min-h-14 flex-1 rounded-2xl border-2 border-slate-300 bg-white text-lg font-extrabold active:bg-slate-100"
+            onClick={() => adjustCount(item.field, item.delta)}
+          >
+            {item.label}
+          </button>
+        ))}
+        <div className="shrink-0 pl-2 text-right tabular-nums">
+          <div className="text-sm font-bold text-slate-500">
+            {state.config.totalStudents} students
+          </div>
+          <div className="text-sm font-bold text-slate-500">
+            {state.config.totalTeachers} teachers
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

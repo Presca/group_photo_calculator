@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+}
+
+/* Large touch targets everywhere. */
+button,
+input,
+select {
+  touch-action: manipulation;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body {
+    background: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+}
