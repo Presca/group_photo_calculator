@@ -47,7 +47,7 @@ src/
   lib/engine/        Pure calculation engine (no React, fully unit tested)
     rowCalculator    Row sizes, parity rules, capacity checks
     heightGroups     Row-aligned height zones (zone = whole rows, exact counts)
-    teacherPlacement Roster, front-row-first placement, interspersed overflow
+    teacherPlacement Roster, front-row-first placement, centred blocks
     stitchPlanner    Multi-shot photo grouping with overlap
     queuePlanner     Queue signs from zones + row spans
     commands         Operation steps + spoken command script
