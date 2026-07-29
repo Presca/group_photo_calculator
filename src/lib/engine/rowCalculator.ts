@@ -28,15 +28,24 @@ export function targetParityForRow(
   return firstRowParity === "odd" ? "even" : "odd";
 }
 
-/** Largest size ≤ maxPerRow with the row's required parity. */
+/**
+ * Capacity of a row under the alternating pattern. The front-row
+ * parity takes the largest size ≤ maxPerRow with that parity; the
+ * alternate rows take that size + 1 — one MORE than the front row,
+ * never one less (e.g. max 21 → 21, 22, 21, 22…). The +1 row may
+ * exceed the nominal per-row max by one; rows compress slightly.
+ */
 export function rowCapFor(
   rowNumber: number,
   maxPerRow: number,
   firstRowParity: Parity = "odd",
 ): number {
-  const wantOdd = targetParityForRow(rowNumber, firstRowParity) === "odd";
-  if (wantOdd) return maxPerRow % 2 === 1 ? maxPerRow : maxPerRow - 1;
-  return maxPerRow % 2 === 0 ? maxPerRow : maxPerRow - 1;
+  const firstWantsOdd = firstRowParity === "odd";
+  const base =
+    maxPerRow % 2 === (firstWantsOdd ? 1 : 0) ? maxPerRow : maxPerRow - 1;
+  return targetParityForRow(rowNumber, firstRowParity) === firstRowParity
+    ? base
+    : base + 1;
 }
 
 /** Total people the strict parity pattern can hold in rowCount rows. */
@@ -62,11 +71,13 @@ export function minimalRowsFor(
   firstRowParity: Parity = "odd",
 ): number {
   if (count <= 0 || maxPerRow <= 0) return 0;
-  let rows = Math.max(1, Math.ceil(count / maxPerRow));
-  let guard = 0;
+  // Smallest row count whose pattern capacity holds everyone (one
+  // arithmetic remainder may stand at the side). Searching upward from
+  // 1 keeps rows as full as possible, so no stubby trailing row.
+  let rows = 1;
   while (
     strictRowCapacity(rows, maxPerRow, firstRowParity) < count - 1 &&
-    guard++ < 1000
+    rows < 1000
   ) {
     rows += 1;
   }
@@ -243,12 +254,15 @@ function sanitizeFixed(
       continue;
     }
     const size = Math.round(value);
-    if (size > maxPerRow) {
+    // The alternating pattern legitimately squeezes one extra person
+    // into alternate rows, so pins may go one over the nominal max.
+    const pinCap = maxPerRow + 1;
+    if (size > pinCap) {
       warnings.push(
-        `Row ${rowNumber} is pinned at ${size} but the stage fits ${maxPerRow} per row — clamped.`,
+        `Row ${rowNumber} is pinned at ${size} but the stage fits about ${maxPerRow} per row — clamped.`,
       );
     }
-    fixed.set(rowNumber, Math.min(maxPerRow, Math.max(1, size)));
+    fixed.set(rowNumber, Math.min(pinCap, Math.max(1, size)));
   }
   return fixed;
 }
@@ -317,11 +331,14 @@ function buildResult({
 }
 
 /**
- * Core strict-parity FILL-UP distribution over an ordered set of rows
- * (front first). Each row is filled to its parity capacity in order;
- * the last rows take the remainder. Returns `sideExtras` — the odd
- * person out who stands at the side — and `unplaced` when the strict
- * pattern cannot hold everyone.
+ * Core distribution over an ordered set of rows (front first).
+ *
+ * Every row sits on a common base: front-parity rows hold `b`, the
+ * alternate rows hold `b + 1` — one MORE than the front row, never one
+ * less. The base is the largest that fits, then the leftover is handed
+ * out two at a time to the front rows (pairs preserve parity), so all
+ * rows stay within a couple of people of each other and the group
+ * reads as one consistent block. The odd person out stands at the side.
  */
 function distribute(
   count: number,
@@ -342,28 +359,60 @@ function distribute(
   }
 
   const caps = rowNumbers.map((r) => rowCapFor(r, maxPerRow, firstRowParity));
-  const seeds: number[] = rowNumbers.map((r) =>
-    targetParityForRow(r, firstRowParity) === "odd" ? 1 : 0,
-  );
-  const oddCount = seeds.reduce((a, b) => a + b, 0);
-
-  const pool = count - oddCount;
-  const pairsWanted = pool >> 1;
-  const sideExtras = pool & 1;
-
-  const pairCaps = caps.map((c, i) => Math.max(0, (c - seeds[i]) >> 1));
-  const totalPairCap = pairCaps.reduce((a, b) => a + b, 0);
-  const pairs = Math.min(pairsWanted, totalPairCap);
-  const unplaced = 2 * (pairsWanted - pairs);
-
-  // Fill up: front rows take their full parity capacity, the back row
-  // takes whatever remains.
-  let left = pairs;
-  for (let i = 0; i < n; i++) {
-    const take = Math.min(pairCaps[i], left);
-    sizes[i] = 2 * take + seeds[i];
-    left -= take;
+  const capSum = caps.reduce((a, b) => a + b, 0);
+  if (count >= capSum) {
+    for (let i = 0; i < n; i++) sizes[i] = caps[i];
+    return { sizes, sideExtras: 0, unplaced: count - capSum };
   }
 
-  return { sizes, sideExtras, unplaced };
+  // `bumped[i]` is 1 when row i is an alternate (+1) row.
+  const bumped: number[] = rowNumbers.map((r) =>
+    targetParityForRow(r, firstRowParity) === firstRowParity ? 0 : 1,
+  );
+  const bumpTotal = bumped.reduce((a, b) => a + b, 0);
+  const baseCap = caps[bumped.findIndex((b) => b === 0)] ?? maxPerRow;
+
+  // Largest base whose parity matches the front row.
+  let base = Math.floor((count - bumpTotal) / n);
+  if (parityOf(base) !== firstRowParity) base -= 1;
+  base = Math.max(1, Math.min(base, baseCap));
+
+  for (let i = 0; i < n; i++) sizes[i] = base + bumped[i];
+  let remaining = count - sizes.reduce((a, b) => a + b, 0);
+
+  // Hand the leftover out to ADJACENT ROW PAIRS (+2 each, 4 per pair),
+  // front pairs first. Bumping a pair together keeps the zigzag: an
+  // alternate row always stays larger than the rows either side of it.
+  let guard = 0;
+  while (remaining >= 4 && guard++ < 10000) {
+    let progressed = false;
+    for (let i = 0; i + 1 < n && remaining >= 4; i += 2) {
+      if (sizes[i] + 2 <= caps[i] && sizes[i + 1] + 2 <= caps[i + 1]) {
+        sizes[i] += 2;
+        sizes[i + 1] += 2;
+        remaining -= 4;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+
+  // The final 0–3 people join the last two rows, split as evenly as
+  // possible, so the group never ends on a stubby row. Only from three
+  // rows up — with fewer, this would disturb the front row, whose
+  // parity is a hard rule.
+  if (remaining > 0 && n >= 3) {
+    const toSecondLast = Math.ceil(remaining / 2);
+    const toLast = remaining - toSecondLast;
+    if (
+      sizes[n - 2] + toSecondLast <= caps[n - 2] + 2 &&
+      sizes[n - 1] + toLast <= caps[n - 1] + 2
+    ) {
+      sizes[n - 2] += toSecondLast;
+      sizes[n - 1] += toLast;
+      remaining = 0;
+    }
+  }
+
+  return { sizes, sideExtras: remaining, unplaced: 0 };
 }

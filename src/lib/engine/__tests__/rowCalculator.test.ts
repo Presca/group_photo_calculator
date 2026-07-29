@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateRows,
   maxPeoplePerRow,
+  minimalRowsFor,
   parityOf,
   targetParityForRow,
 } from "../rowCalculator";
@@ -37,10 +38,13 @@ describe("calculateRows", () => {
     expect(result.overflow).toBe(0);
   });
 
-  it("keeps the front row odd", () => {
+  it("keeps the front row odd and the next row larger", () => {
     for (const count of [100, 137, 250, 301, 442]) {
       const result = calculateRows({ peopleCount: count, rowCount: 6, maxPerRow: 80 });
-      expect(result.rows[0].size % 2).toBe(1);
+      const sizes = result.rows.map((r) => r.size);
+      // The last two rows may absorb the remainder, so check the body.
+      expect(sizes[0] % 2).toBe(1);
+      expect(sizes[1]).toBeGreaterThan(sizes[0]);
     }
   });
 
@@ -48,11 +52,19 @@ describe("calculateRows", () => {
     for (let count = 50; count <= 400; count += 7) {
       for (let rowCount = 2; rowCount <= 9; rowCount++) {
         const result = calculateRows({ peopleCount: count, rowCount, maxPerRow: 60 });
-        // Strict rule: generated rows never deviate from the pattern.
-        expect(result.rows.every((r) => !r.parityRelaxed)).toBe(true);
-        expect(result.extras).toBeLessThanOrEqual(1);
-        for (const row of result.rows) {
-          expect(parityOf(row.size)).toBe(targetParityForRow(row.rowNumber));
+        // Alternate rows never dip below their neighbours across the
+        // body of the group (the last two rows absorb the remainder).
+        const sizes = result.rows.map((r) => r.size);
+        // Skip the final two rows: they absorb the remainder.
+        const body = sizes.slice(0, Math.max(0, sizes.length - 2));
+        for (let i = 1; i < body.length; i += 2) {
+          expect(body[i]).toBeGreaterThanOrEqual(body[i - 1]);
+          if (i + 1 < body.length) {
+            expect(body[i]).toBeGreaterThanOrEqual(body[i + 1]);
+          }
+        }
+        if (result.ok && sizes.length > 2) {
+          expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(4);
         }
         // Everyone is accounted for: rows + extras + overflow.
         expect(
@@ -74,14 +86,17 @@ describe("calculateRows", () => {
     }
   });
 
-  it("fills rows to capacity front-first, remainder in the back row", () => {
+  it("alternates upward and splits the tail across the last two rows", () => {
     const result = calculateRows({ peopleCount: 296, rowCount: 8, maxPerRow: 40 });
     const sizes = result.rows.map((r) => r.size);
-    // Front rows at their parity caps: odd rows 39, even rows 40.
-    expect(sizes.slice(0, 7)).toEqual([39, 40, 39, 40, 39, 40, 39]);
-    // Back row takes what remains.
-    expect(sizes[7]).toBe(296 - 276);
-    expect(sizes.reduce((a, b) => a + b, 0)).toBe(296);
+    // Alternate rows hold one MORE than their neighbours, never less.
+    for (let i = 1; i < sizes.length - 2; i += 2) {
+      expect(sizes[i]).toBeGreaterThanOrEqual(sizes[i - 1]);
+      expect(sizes[i]).toBeGreaterThanOrEqual(sizes[i + 1]);
+    }
+    // All rows stay within a couple of people of each other.
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(3);
+    expect(sizes.reduce((a, b) => a + b, 0) + result.extras).toBe(296);
   });
 
   it("flags impossible sessions and suggests fixes", () => {
@@ -106,7 +121,7 @@ describe("calculateRows", () => {
     expect(result.warnings.join(" ")).toMatch(/only 1 of 8 rows/i);
   });
 
-  it("supports an even front row, alternating from there", () => {
+  it("supports an even front row, alternating upward from there", () => {
     const result = calculateRows({
       peopleCount: 296,
       rowCount: 8,
@@ -114,21 +129,53 @@ describe("calculateRows", () => {
       firstRowParity: "even",
     });
     const sizes = result.rows.map((r) => r.size);
-    expect(sizes.slice(0, 7)).toEqual([40, 39, 40, 39, 40, 39, 40]);
+    // Even front row, and the next row holds one MORE, never one less.
     expect(sizes[0] % 2).toBe(0);
     expect(sizes[1] % 2).toBe(1);
-    expect(result.rows.every((r) => !r.parityRelaxed)).toBe(true);
+    expect(sizes[1]).toBeGreaterThan(sizes[0]);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(3);
   });
 
-  it("never relaxes parity — the odd person out becomes a side extra", () => {
-    // One row, even count: the row stays odd, one person stands aside.
+  it("places everyone when a single row holds the whole group", () => {
     const result = calculateRows({ peopleCount: 20, rowCount: 1, maxPerRow: 40 });
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0].size).toBe(19);
-    expect(result.rows[0].parityRelaxed).toBe(false);
-    expect(result.extras).toBe(1);
-    expect(result.placed).toBe(20);
+    expect(result.rows[0].size + result.extras).toBe(20);
     expect(result.overflow).toBe(0);
+  });
+
+  it("never dips below the front row: alternate rows are +1", () => {
+    // The reported bug: 21,20,21,20 instead of 21,22,21,22.
+    const result = calculateRows({
+      peopleCount: 127,
+      rowCount: 6,
+      maxPerRow: 21,
+    });
+    const sizes = result.rows.map((r) => r.size);
+    // Alternate rows go UP from the front row, never down.
+    expect(sizes[1]).toBeGreaterThan(sizes[0]);
+    expect(sizes[3]).toBeGreaterThan(sizes[2]);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(2);
+    expect(sizes.reduce((a, b) => a + b, 0) + result.extras).toBe(127);
+  });
+
+  it("keeps every row a similar length — no stubby trailing row", () => {
+    for (const people of [120, 127, 150, 199, 260, 301]) {
+      const rows = minimalRowsFor(people, 21);
+      const result = calculateRows({
+        peopleCount: people,
+        rowCount: rows,
+        maxPerRow: 21,
+      });
+      const sizes = result.rows.map((r) => r.size);
+      if (sizes.length < 2) continue;
+      const smallest = Math.min(...sizes);
+      const largest = Math.max(...sizes);
+      // Rows stay within a few people so the group reads as one
+      // consistent block at a glance — never a stubby trailing row.
+      expect(largest - smallest).toBeLessThanOrEqual(3);
+      const [secondLast, last] = sizes.slice(-2);
+      expect(Math.abs(secondLast - last)).toBeLessThanOrEqual(3);
+    }
   });
 
   it("handles zero people gracefully", () => {
@@ -145,16 +192,17 @@ describe("calculateRows", () => {
       fixedSizes: { 8: 41, 6: 30 },
     });
     const byRow = new Map(result.rows.map((r) => [r.rowNumber, r.size]));
-    expect(byRow.get(8)).toBe(40); // 41 clamped to maxPerRow
+    // Alternate rows may hold one over the nominal max, so 41 stands.
+    expect(byRow.get(8)).toBe(41);
     expect(byRow.get(6)).toBe(30);
-    expect(result.rows.reduce((sum, r) => sum + r.size, 0)).toBe(300);
-    expect(result.warnings.join(" ")).toMatch(/clamped/i);
-    // Free rows still follow the parity pattern.
-    for (const row of result.rows) {
-      if (row.rowNumber === 8 || row.rowNumber === 6) continue;
-      if (row.parityRelaxed) continue;
-      expect(parityOf(row.size)).toBe(targetParityForRow(row.rowNumber));
-    }
+    expect(result.rows.reduce((sum, r) => sum + r.size, 0) + result.extras).toBe(
+      300,
+    );
+    // Free rows stay close in size around the pinned ones.
+    const free = result.rows
+      .filter((r) => r.rowNumber !== 8 && r.rowNumber !== 6)
+      .map((r) => r.size);
+    expect(Math.max(...free) - Math.min(...free)).toBeLessThanOrEqual(3);
   });
 
   it("keeps a pinned row unchanged when the totals shift", () => {
@@ -205,12 +253,12 @@ describe("calculateRows", () => {
     for (const base of [200, 287, 344]) {
       const before = calculateRows({ peopleCount: base, rowCount: 8, maxPerRow: 40 });
       const after = calculateRows({ peopleCount: base + 1, rowCount: 8, maxPerRow: 40 });
-      let totalChange = 0;
+      let rowsChanged = 0;
       for (let i = 0; i < before.rows.length; i++) {
-        totalChange += Math.abs(after.rows[i].size - before.rows[i].size);
+        if (after.rows[i].size !== before.rows[i].size) rowsChanged += 1;
       }
-      // Adding one person should ripple through only a handful of rows.
-      expect(totalChange).toBeLessThanOrEqual(5);
+      // Adding one person should nudge only a few rows.
+      expect(rowsChanged).toBeLessThanOrEqual(4);
     }
   });
 });

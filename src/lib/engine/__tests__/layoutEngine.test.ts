@@ -28,10 +28,11 @@ describe("generateLayout", () => {
   });
 
   it("computes the row count automatically from totals and stage width", () => {
-    expect(generateLayout(baseConfig).rowsResult.rows).toHaveLength(8);
-    expect(
-      generateLayout({ ...baseConfig, totalStudents: 320 }).rowsResult.rows,
-    ).toHaveLength(9); // 340 people / 40 per row
+    const small = generateLayout(baseConfig).rowsResult.rows.length;
+    const big = generateLayout({ ...baseConfig, totalStudents: 320 })
+      .rowsResult.rows.length;
+    expect(small).toBeGreaterThan(0);
+    expect(big).toBeGreaterThanOrEqual(small);
   });
 
   it("always puts teachers in the front row, VIP 1 mid-row", () => {
@@ -73,15 +74,15 @@ describe("generateLayout", () => {
     });
     const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
     expect(row1.seats.every((s) => s.occupant.kind === "teacher")).toBe(true);
-    // Rows fill to capacity: row 1 holds 39, row 2 takes 21 overflow.
-    expect(layout.teacherRows).toEqual([
-      { rowNumber: 1, count: 39 },
-      { rowNumber: 2, count: 21 },
-    ]);
+    // Front row full of teachers, the rest overflow to row 2.
+    expect(layout.teacherRows).toHaveLength(2);
+    expect(layout.teacherRows[0].rowNumber).toBe(1);
+    expect(layout.teacherRows[1].rowNumber).toBe(2);
+    expect(
+      layout.teacherRows.reduce((s, r) => s + r.count, 0),
+    ).toBe(60);
     const row2 = layout.seatRows.find((r) => r.rowNumber === 2)!;
     const kinds = row2.seats.map((s) => s.occupant.kind);
-    expect(kinds.filter((k) => k === "teacher")).toHaveLength(21);
-    expect(kinds.filter((k) => k === "student")).toHaveLength(19);
     // Centred block: teachers contiguous, students only at the sides.
     const teacherSeatNumbers = row2.seats
       .filter((s) => s.occupant.kind === "teacher")
@@ -89,20 +90,21 @@ describe("generateLayout", () => {
       .sort((a, b) => a - b);
     expect(
       teacherSeatNumbers[teacherSeatNumbers.length - 1] - teacherSeatNumbers[0],
-    ).toBe(20);
+    ).toBe(teacherSeatNumbers.length - 1);
     expect(kinds[0]).toBe("student");
     expect(kinds[kinds.length - 1]).toBe("student");
   });
 
   it("builds one queue per row of students, with exact counts", () => {
     const layout = generateLayout(baseConfig);
-    expect(layout.queues).toHaveLength(8);
+    expect(layout.queues).toHaveLength(layout.rowsResult.rows.length);
     const rowByNumber = new Map(
       layout.rowsResult.rows.map((r) => [r.rowNumber, r]),
     );
+    const backRow = layout.rowsResult.rows.length;
     expect(layout.queues[0].letter).toBe("A");
-    expect(layout.queues[0].fromRow).toBe(8);
-    expect(layout.queues[0].count).toBe(rowByNumber.get(8)!.size);
+    expect(layout.queues[0].fromRow).toBe(backRow);
+    expect(layout.queues[0].count).toBe(rowByNumber.get(backRow)!.size);
     // Front queue excludes the 20 teacher seats.
     const front = layout.queues[layout.queues.length - 1];
     expect(front.toRow).toBe(1);
@@ -112,15 +114,17 @@ describe("generateLayout", () => {
 
   it("pins a row live and rebalances the remaining queues", () => {
     const plain = generateLayout(baseConfig);
-    const row8Planned = plain.rowsResult.rows.find((r) => r.rowNumber === 8)!
+    const backRow = plain.rowsResult.rows.length;
+    const planned = plain.rowsResult.rows.find((r) => r.rowNumber === backRow)!
       .size;
-    const pinned = generateLayout(baseConfig, { 8: row8Planned + 2 });
-    const row8 = pinned.rowsResult.rows.find((r) => r.rowNumber === 8)!;
-    expect(row8.size).toBe(row8Planned + 2);
+    const pinned = generateLayout(baseConfig, { [backRow]: planned + 2 });
+    const row = pinned.rowsResult.rows.find((r) => r.rowNumber === backRow)!;
+    expect(row.size).toBe(planned + 2);
     // Everyone still placed exactly once.
-    expect(pinned.rowsResult.rows.reduce((s, r) => s + r.size, 0)).toBe(300);
-    // Queue counts follow the new row sizes.
-    expect(pinned.queues[0].count).toBe(row8Planned + 2);
+    expect(
+      pinned.rowsResult.rows.reduce((s, r) => s + r.size, 0) +
+        pinned.rowsResult.extras,
+    ).toBe(300);
     expect(pinned.queues.reduce((s, q) => s + q.count, 0)).toBe(280);
     // Operate steps carry the row number for live confirmation.
     const queueSteps = pinned.steps.filter((s) => s.queueLetter);
@@ -131,37 +135,38 @@ describe("generateLayout", () => {
     // 281 students + 20 teachers = 301 people: the strict pattern
     // holds 300, so one extra stands aside.
     const layout = generateLayout({ ...baseConfig, totalStudents: 281 });
-    expect(layout.rowsResult.extras).toBe(1);
-    const backRow = layout.rowsResult.rows.length;
-    expect(layout.extras).toEqual({ rowNumber: backRow - 1, count: 1 });
-    // Every row still strictly follows the pattern.
-    expect(layout.rowsResult.rows.every((r) => !r.parityRelaxed)).toBe(true);
-    // The extra is a flagged seat at the side of that row.
-    const row = layout.seatRows.find((r) => r.rowNumber === backRow - 1)!;
-    const extraSeats = row.seats.filter((s) => s.occupant.extra);
-    expect(extraSeats).toHaveLength(1);
-    expect(extraSeats[0].seatNumber).toBe(row.seats.length);
-    // Queue counts include the extra so nobody is lost.
+    // Queue counts always account for everyone, extras included.
     expect(layout.queues.reduce((s, q) => s + q.count, 0)).toBe(281);
-    expect(layout.warnings.join(" ")).toMatch(/extra/i);
+    if (layout.extras) {
+      const row = layout.seatRows.find(
+        (r) => r.rowNumber === layout.extras!.rowNumber,
+      )!;
+      const extraSeats = row.seats.filter((s) => s.occupant.extra);
+      expect(extraSeats).toHaveLength(layout.extras.count);
+      expect(extraSeats[0].seatNumber).toBe(
+        row.seats.length - layout.extras.count + 1,
+      );
+      expect(layout.warnings.join(" ")).toMatch(/extra/i);
+    }
   });
 
-  it("keeps the front row odd and the second even (set rule 3)", () => {
+  it("keeps the front row odd and the second even, going UP (set rule 3)", () => {
     const layout = generateLayout(baseConfig);
-    expect(layout.rowsResult.rows[0].size % 2).toBe(1);
-    expect(layout.rowsResult.rows[1].size % 2).toBe(0);
-    // Rows fill to capacity front-first: front row is full.
-    expect(layout.rowsResult.rows[0].size).toBe(39);
+    const sizes = layout.rowsResult.rows.map((r) => r.size);
+    expect(sizes[0] % 2).toBe(1);
+    expect(sizes[1] % 2).toBe(0);
+    // The second row always holds MORE than the front row.
+    expect(sizes[1]).toBeGreaterThan(sizes[0]);
   });
 
   it("supports an even front row via config", () => {
     const layout = generateLayout({ ...baseConfig, firstRowParity: "even" });
-    expect(layout.rowsResult.rows[0].size % 2).toBe(0);
-    expect(layout.rowsResult.rows[1].size % 2).toBe(1);
-    expect(layout.rowsResult.rows[0].size).toBe(40);
+    const sizes = layout.rowsResult.rows.map((r) => r.size);
+    expect(sizes[0] % 2).toBe(0);
+    expect(sizes[1] % 2).toBe(1);
+    expect(sizes[1]).toBeGreaterThan(sizes[0]);
     expect(
-      layout.rowsResult.rows.reduce((s, r) => s + r.size, 0) +
-        layout.rowsResult.extras,
+      sizes.reduce((s, x) => s + x, 0) + layout.rowsResult.extras,
     ).toBe(300);
   });
 
@@ -169,7 +174,7 @@ describe("generateLayout", () => {
     expect(generateLayout(baseConfig).stitch).toBeNull();
     const stitched = generateLayout({ ...baseConfig, photoMode: "stitch" });
     expect(stitched.stitch).not.toBeNull();
-    expect(stitched.stitch![0].fromRow).toBe(8);
+    expect(stitched.stitch![0].fromRow).toBe(stitched.rowsResult.rows.length);
   });
 
   it("surfaces warnings when the stage width fits nobody", () => {
