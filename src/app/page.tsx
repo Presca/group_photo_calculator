@@ -113,12 +113,12 @@ export default function SetupPage() {
           />
 
           <SegmentedControl
-            label="Height Groups"
+            label="Height zones / queues (max)"
             value={String(config.heightGroupCount) as "5" | "7" | "9"}
             options={[
-              { value: "5", label: "5 groups" },
-              { value: "7", label: "7 groups" },
-              { value: "9", label: "9 groups" },
+              { value: "5", label: "5 zones" },
+              { value: "7", label: "7 zones" },
+              { value: "9", label: "9 zones" },
             ]}
             onChange={(v) =>
               patchConfig({ heightGroupCount: Number(v) as 5 | 7 | 9 })

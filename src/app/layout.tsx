@@ -23,7 +23,9 @@ export default function RootLayout({
       <body className="min-h-screen">
         <SessionProvider>
           <Nav />
-          <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+          <main className="mx-auto max-w-6xl px-3 py-4 pb-24 sm:px-4 sm:py-6 md:pb-8">
+            {children}
+          </main>
         </SessionProvider>
       </body>
     </html>

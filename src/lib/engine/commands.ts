@@ -59,14 +59,15 @@ export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
     .filter((g) => g.count > 0)
     .forEach((group, i) => {
       const span = spanByGroup.get(group.id);
+      const letter = String.fromCharCode(65 + i);
       steps.push({
         kind: "call",
         heading: "NOW CALL",
-        primary: group.id,
+        primary: `QUEUE ${letter}`,
         detail: span
-          ? `Move to ${formatRowRange(span.fromRow, span.toRow)}`
-          : "Move to your row",
-        queueLetter: String.fromCharCode(65 + i),
+          ? `${group.id} — fill ${formatRowRange(span.fromRow, span.toRow)}`
+          : `${group.id} — move to your row`,
+        queueLetter: letter,
       });
     });
 
@@ -100,11 +101,16 @@ export function buildCommandScript(ctx: CommandContext): string[] {
     }
   }
 
+  let queueIndex = 0;
   for (const group of ctx.groups) {
     if (group.count <= 0) continue;
+    const letter = String.fromCharCode(65 + queueIndex);
+    queueIndex += 1;
     const span = spanByGroup.get(group.id);
     if (span && span.fromRow > 0) {
-      commands.push(`${group.id} move to ${formatRowRange(span.fromRow, span.toRow)}.`);
+      commands.push(
+        `Queue ${letter}, fill ${formatRowRange(span.fromRow, span.toRow)}.`,
+      );
     }
   }
 

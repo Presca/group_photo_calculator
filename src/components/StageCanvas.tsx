@@ -7,7 +7,6 @@ interface SeatPoint {
   seat: Seat;
   x: number;
   y: number;
-  rowKind: "seated" | "standing";
 }
 
 interface StageCanvasProps {
@@ -16,13 +15,16 @@ interface StageCanvasProps {
   interactive?: boolean;
 }
 
-const SPAN = Math.PI * 0.5; // total arc angle for the widest row
-const BASE_RADIUS = 320;
-const ROW_GAP = 56;
+const SEAT_SPACING = 22;
+const ROW_SPACING = 44;
+const SEAT_R = 8.5;
+const LABEL_W = 64;
+const PAD = 14;
 
 /**
- * Top-down stage view. Rows are concentric arcs around the camera
- * position; each seat is a circle. Blue = teachers, grey = students
+ * Front view of the finished photograph: straight rows on risers, the
+ * back (tallest) row at the top, the seated teacher row at the bottom —
+ * exactly what the camera will see. Blue = teachers, grey = students
  * (darker grey = taller zone). Tap a seat for details, drag one seat
  * onto another to swap them.
  */
@@ -32,6 +34,7 @@ export function StageCanvas({
   interactive = true,
 }: StageCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<SeatRef | null>(null);
   const [hovered, setHovered] = useState<{
     seat: Seat;
@@ -46,7 +49,7 @@ export function StageCanvas({
   } | null>(null);
 
   const geometry = useMemo(() => buildGeometry(seatRows), [seatRows]);
-  const { points, arcs, viewBox, seatRadius, cameraY } = geometry;
+  const { points, bands, width, height } = geometry;
 
   const toSvgCoords = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -67,7 +70,7 @@ export function StageCanvas({
         best = p;
       }
     }
-    if (best && bestDist <= (seatRadius * 3) ** 2) return best;
+    if (best && bestDist <= (SEAT_R * 3) ** 2) return best;
     return null;
   };
 
@@ -127,115 +130,111 @@ export function StageCanvas({
 
   return (
     <div className="relative">
-      <svg
-        ref={svgRef}
-        viewBox={viewBox}
-        className="w-full select-none"
-        style={{ touchAction: interactive ? "none" : "auto" }}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={() => setHovered(null)}
-      >
-        {/* Row arcs */}
-        {arcs.map((arc) => (
-          <g key={arc.rowNumber}>
-            <path
-              d={arc.path}
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth={seatRadius * 2.4}
-              strokeLinecap="round"
-            />
-            <text
-              x={arc.labelX}
-              y={arc.labelY}
-              textAnchor="end"
-              className="fill-slate-500"
-              fontSize={seatRadius * 1.6}
-              fontWeight={700}
-            >
-              {arc.rowNumber === 0 ? "Seated" : `Row ${arc.rowNumber}`}
-            </text>
-          </g>
-        ))}
+      <div ref={scrollRef} className="overflow-x-auto">
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${width} ${height}`}
+          className={interactive ? "mx-auto h-auto" : "h-auto w-full"}
+          style={interactive ? { width, minWidth: Math.min(width, 640) } : undefined}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={() => setHovered(null)}
+        >
+          {/* Riser bands, one per row */}
+          {bands.map((band) => (
+            <g key={band.key}>
+              <rect
+                x={0}
+                y={band.y - ROW_SPACING / 2}
+                width={width}
+                height={ROW_SPACING}
+                fill={band.fill}
+              />
+              <text
+                x={8}
+                y={band.y + 4}
+                className="fill-slate-500"
+                fontSize={12}
+                fontWeight={700}
+              >
+                {band.label}
+              </text>
+            </g>
+          ))}
 
-        {/* Seats */}
-        {points.map((p) => {
-          const isTeacher = p.seat.occupant.kind === "teacher";
-          const isPrincipal = p.seat.occupant.role === "principal";
-          const isDragSource =
-            drag &&
-            drag.from.rowNumber === p.seat.rowNumber &&
-            drag.from.seatNumber === p.seat.seatNumber;
-          const isSelected =
-            selected &&
-            selected.rowNumber === p.seat.rowNumber &&
-            selected.seatNumber === p.seat.seatNumber;
-          return (
-            <circle
-              key={`${p.seat.rowNumber}:${p.seat.seatNumber}`}
-              cx={p.x}
-              cy={p.y}
-              r={seatRadius}
-              fill={seatFill(p.seat)}
-              stroke={
-                isPrincipal
-                  ? "#1e3a8a"
-                  : isSelected
-                    ? "#2563eb"
-                    : isTeacher
-                      ? "#1d4ed8"
-                      : "#64748b"
-              }
-              strokeWidth={isSelected || isPrincipal ? 3 : 1}
-              opacity={isDragSource ? 0.35 : 1}
-              style={{ cursor: interactive ? "grab" : "default" }}
-              onPointerDown={handlePointerDown(p)}
-              onMouseEnter={(e) =>
-                setHovered({ seat: p.seat, clientX: e.clientX, clientY: e.clientY })
-              }
-              onMouseMove={(e) =>
-                setHovered({ seat: p.seat, clientX: e.clientX, clientY: e.clientY })
-              }
-              onMouseLeave={() => setHovered(null)}
-            />
-          );
-        })}
+          {/* Seats */}
+          {points.map((p) => {
+            const isTeacher = p.seat.occupant.kind === "teacher";
+            const isPrincipal = p.seat.occupant.role === "principal";
+            const isDragSource =
+              drag &&
+              drag.from.rowNumber === p.seat.rowNumber &&
+              drag.from.seatNumber === p.seat.seatNumber;
+            const isSelected =
+              selected &&
+              selected.rowNumber === p.seat.rowNumber &&
+              selected.seatNumber === p.seat.seatNumber;
+            return (
+              <circle
+                key={`${p.seat.rowNumber}:${p.seat.seatNumber}`}
+                cx={p.x}
+                cy={p.y}
+                r={SEAT_R}
+                fill={seatFill(p.seat)}
+                stroke={
+                  isPrincipal
+                    ? "#1e3a8a"
+                    : isSelected
+                      ? "#2563eb"
+                      : isTeacher
+                        ? "#1d4ed8"
+                        : "#64748b"
+                }
+                strokeWidth={isSelected || isPrincipal ? 3 : 1}
+                opacity={isDragSource ? 0.35 : 1}
+                style={{
+                  cursor: interactive ? "grab" : "default",
+                  touchAction: interactive ? "none" : undefined,
+                }}
+                onPointerDown={handlePointerDown(p)}
+                onMouseEnter={(e) =>
+                  setHovered({
+                    seat: p.seat,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                  })
+                }
+                onMouseMove={(e) =>
+                  setHovered({
+                    seat: p.seat,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                  })
+                }
+                onMouseLeave={() => setHovered(null)}
+              />
+            );
+          })}
 
-        {/* Drag ghost */}
-        {drag && drag.moved && (
-          <circle
-            cx={drag.x}
-            cy={drag.y}
-            r={seatRadius * 1.2}
-            fill="#2563eb"
-            opacity={0.5}
-          />
-        )}
+          {/* Drag ghost */}
+          {drag && drag.moved && (
+            <circle cx={drag.x} cy={drag.y} r={SEAT_R * 1.3} fill="#2563eb" opacity={0.5} />
+          )}
 
-        {/* Camera marker */}
-        <g>
-          <rect
-            x={-34}
-            y={cameraY - 14}
-            width={68}
-            height={36}
-            rx={8}
-            fill="#0f172a"
-          />
-          <circle cx={0} cy={cameraY + 4} r={10} fill="#38bdf8" />
+          {/* Camera side marker */}
           <text
-            x={0}
-            y={cameraY + 44}
+            x={width / 2}
+            y={height - 8}
             textAnchor="middle"
-            className="fill-slate-500"
-            fontSize={16}
-            fontWeight={700}
+            className="fill-slate-400"
+            fontSize={12}
+            fontWeight={800}
+            letterSpacing={3}
           >
-            CAMERA
+            ▲ CAMERA THIS SIDE ▲
           </text>
-        </g>
-      </svg>
+        </svg>
+      </div>
 
       {/* Hover tooltip (mouse devices) */}
       {hovered && !drag && (
@@ -250,7 +249,7 @@ export function StageCanvas({
       {/* Selected seat panel (touch devices) */}
       {selectedSeat && (
         <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-white">
-          <span className="text-lg font-bold">
+          <span className="text-base font-bold sm:text-lg">
             {seatDescription(selectedSeat)}
           </span>
           <button
@@ -262,7 +261,7 @@ export function StageCanvas({
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-4 text-sm font-semibold text-slate-600">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-600 sm:text-sm">
         <span className="flex items-center gap-2">
           <span className="inline-block h-4 w-4 rounded-full bg-blue-600" />
           Teachers
@@ -271,7 +270,7 @@ export function StageCanvas({
           <span className="inline-block h-4 w-4 rounded-full border border-slate-500 bg-slate-400" />
           Students (darker = taller)
         </span>
-        {interactive && <span>Tap a seat for details · drag to swap</span>}
+        {interactive && <span>Tap for details · drag to swap · scroll sideways</span>}
       </div>
     </div>
   );
@@ -301,81 +300,48 @@ function seatFill(seat: Seat): string {
 }
 
 function seatDescription(seat: Seat): string {
-  const where =
-    seat.rowNumber === 0 ? "Seated row" : `Row ${seat.rowNumber}`;
+  const where = seat.rowNumber === 0 ? "Seated row" : `Row ${seat.rowNumber}`;
   if (seat.occupant.kind === "teacher") {
     return `${where} · Seat ${seat.seatNumber} · ${seat.occupant.label}`;
   }
-  return `${where} · Seat ${seat.seatNumber} · Height group ${
+  return `${where} · Seat ${seat.seatNumber} · Zone ${
     seat.occupant.groupId ?? "—"
   }`;
 }
 
 function buildGeometry(seatRows: SeatRow[]) {
-  const maxSeats = Math.max(1, ...seatRows.map((r) => r.seats.length));
-  const anglePerSeat = SPAN / maxSeats;
+  // Photo order: back row at the top, then forward, seated row last.
+  const ordered = [
+    ...seatRows
+      .filter((r) => r.kind === "standing")
+      .sort((a, b) => b.rowNumber - a.rowNumber),
+    ...seatRows.filter((r) => r.kind === "seated"),
+  ];
 
-  const rows = [...seatRows].sort((a, b) => a.rowNumber - b.rowNumber);
-  const seatRadius = Math.max(
-    7,
-    Math.min(16, BASE_RADIUS * anglePerSeat * 0.42),
-  );
+  const maxSeats = Math.max(1, ...ordered.map((r) => r.seats.length));
+  const width = LABEL_W + maxSeats * SEAT_SPACING + PAD * 2;
+  const height = PAD + ordered.length * ROW_SPACING + 28;
 
   const points: SeatPoint[] = [];
-  const arcs: {
-    rowNumber: number;
-    path: string;
-    labelX: number;
-    labelY: number;
-  }[] = [];
+  const bands: { key: string; y: number; label: string; fill: string }[] = [];
 
-  rows.forEach((row, idx) => {
-    const radius = BASE_RADIUS + idx * ROW_GAP;
+  ordered.forEach((row, idx) => {
+    const y = PAD + idx * ROW_SPACING + ROW_SPACING / 2;
     const n = row.seats.length;
-    const total = anglePerSeat * n;
-    const start = -Math.PI / 2 - total / 2 + anglePerSeat / 2;
+    const xStart = LABEL_W + PAD + ((maxSeats - n) * SEAT_SPACING) / 2 + SEAT_SPACING / 2;
 
-    row.seats.forEach((seat, i) => {
-      // Angle increases left → right as seen from the camera.
-      const theta = start + i * anglePerSeat;
-      points.push({
-        seat,
-        x: radius * Math.cos(theta),
-        y: radius * Math.sin(theta),
-        rowKind: row.kind,
-      });
+    bands.push({
+      key: `band-${row.rowNumber}`,
+      y,
+      label: row.kind === "seated" ? "Seated" : `Row ${row.rowNumber}`,
+      fill:
+        row.kind === "seated" ? "#eff6ff" : idx % 2 === 0 ? "#f8fafc" : "#ffffff",
     });
 
-    const a0 = start - anglePerSeat / 2;
-    const a1 = start + total - anglePerSeat / 2;
-    const x0 = radius * Math.cos(a0);
-    const y0 = radius * Math.sin(a0);
-    const x1 = radius * Math.cos(a1);
-    const y1 = radius * Math.sin(a1);
-    arcs.push({
-      rowNumber: row.rowNumber,
-      path: `M ${x0} ${y0} A ${radius} ${radius} 0 0 1 ${x1} ${y1}`,
-      labelX: x0 - seatRadius * 1.8,
-      labelY: y0,
+    row.seats.forEach((seat, i) => {
+      points.push({ seat, x: xStart + i * SEAT_SPACING, y });
     });
   });
 
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const pad = seatRadius * 2 + 70;
-  // The camera marker sits between the geometric focal point and the
-  // front row so the diagram stays compact.
-  const cameraY = -BASE_RADIUS + 150;
-  const minX = Math.min(...xs, -120) - pad;
-  const maxX = Math.max(...xs, 120) + pad;
-  const minY = Math.min(...ys, cameraY) - pad;
-  const maxY = Math.max(...ys, cameraY + 60) + pad;
-
-  return {
-    points,
-    arcs,
-    seatRadius,
-    cameraY,
-    viewBox: `${minX} ${minY} ${maxX - minX} ${maxY - minY}`,
-  };
+  return { points, bands, width, height };
 }

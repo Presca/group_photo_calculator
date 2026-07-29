@@ -1,7 +1,6 @@
 import { buildCommandScript, buildOperationSteps } from "./commands";
 import {
-  assignGroupsToRows,
-  calculateHeightGroups,
+  buildRowAlignedZones,
   heightDescriptor,
   type RowStudentCapacity,
 } from "./heightGroups";
@@ -98,19 +97,14 @@ export function generateLayout(config: SessionConfig): StageLayout {
     }
   }
 
-  // Height groups cover students only.
-  const groups = calculateHeightGroups(
-    config.totalStudents,
-    config.heightGroupCount,
-  );
+  // Height zones are aligned to row boundaries so each queue empties
+  // into exactly its row(s). Zones cover students only.
   const capacities: RowStudentCapacity[] = rowsResult.rows.map((r) => ({
     rowNumber: r.rowNumber,
     studentCapacity: r.size - (teachersPerRow.get(r.rowNumber) ?? 0),
   }));
-  const assignment = assignGroupsToRows(capacities, groups);
-  if (assignment.unplaced > 0 && rowsResult.ok) {
-    warnings.push(`${assignment.unplaced} students could not be assigned to a row.`);
-  }
+  const assignment = buildRowAlignedZones(capacities, config.heightGroupCount);
+  const groups = assignment.groups;
 
   const roster = generateTeacherRoster(config.totalTeachers);
   const standingRowSize = rowByNumber.get(standingRowNumber)?.size ?? 0;

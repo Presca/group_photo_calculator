@@ -87,22 +87,27 @@ export default function PlanPage() {
 
         <StitchPanel layout={layout} />
 
-        <SectionCard title="Queues">
+        <SectionCard title="Queues (one per row)">
+          <p className="mb-3 text-sm font-semibold text-slate-500 sm:text-base">
+            Each queue holds exactly its row&apos;s student count — when a queue
+            empties, its row is full. If they don&apos;t match, a count is off.
+          </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {layout.queues.map((queue) => (
               <div
                 key={queue.letter}
                 className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3"
               >
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-xl font-extrabold text-white">
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl font-extrabold text-white">
                   {queue.letter}
                 </span>
                 <div>
                   <div className="font-extrabold">
-                    {queue.groupId} · {queue.count} students
+                    {formatRowRange(queue.fromRow, queue.toRow)} ·{" "}
+                    {queue.count} students
                   </div>
                   <div className="text-sm font-semibold text-slate-500">
-                    {formatRowRange(queue.fromRow, queue.toRow)}
+                    {queue.groupId} · {queue.descriptor}
                   </div>
                 </div>
               </div>

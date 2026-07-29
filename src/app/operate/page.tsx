@@ -35,26 +35,28 @@ export default function OperatePage() {
     clamped + 1 < layout.steps.length ? layout.steps[clamped + 1] : null;
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col">
-      <div className="flex items-center justify-between text-lg font-bold text-slate-500">
+    <div className="flex min-h-[calc(100dvh-12rem)] flex-col md:min-h-[calc(100vh-8rem)]">
+      <div className="flex items-center justify-between text-base font-bold text-slate-500 sm:text-lg">
         <span>
           Step {clamped + 1} of {layout.steps.length}
         </span>
         {step.queueLetter && <span>Queue {step.queueLetter}</span>}
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center rounded-3xl bg-white py-10 text-center shadow-sm border border-slate-200 my-4">
-        <div className="text-2xl font-extrabold uppercase tracking-[0.3em] text-slate-400">
+      <div className="flex flex-1 flex-col items-center justify-center rounded-3xl bg-white py-8 text-center shadow-sm border border-slate-200 my-3 sm:my-4 sm:py-10">
+        <div className="text-xl font-extrabold uppercase tracking-[0.3em] text-slate-400 sm:text-2xl">
           {step.heading}
         </div>
         <div
-          className={`my-4 font-black leading-none tracking-tight ${
-            step.primary.length <= 3 ? "text-[9rem] sm:text-[13rem]" : "text-6xl sm:text-8xl"
+          className={`my-4 px-2 font-black leading-none tracking-tight ${
+            step.primary.length <= 8
+              ? "text-6xl sm:text-8xl lg:text-[10rem]"
+              : "text-4xl sm:text-6xl lg:text-8xl"
           } ${step.kind === "call" ? "text-blue-700" : "text-slate-900"}`}
         >
           {step.primary}
         </div>
-        <div className="max-w-2xl px-6 text-3xl font-extrabold text-slate-700">
+        <div className="max-w-2xl px-4 text-2xl font-extrabold text-slate-700 sm:px-6 sm:text-3xl">
           {step.detail}
         </div>
         {next && (

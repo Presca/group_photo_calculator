@@ -1,13 +1,8 @@
-import type {
-  GroupRowSpan,
-  HeightGroup,
-  HeightGroupCount,
-  RowGroupSlice,
-} from "./types";
+import type { GroupRowSpan, HeightGroup, RowGroupSlice } from "./types";
 
 /**
- * Human descriptor for a height group.
- * @param indexFromTallest 0 = tallest group.
+ * Human descriptor for a height zone.
+ * @param indexFromTallest 0 = tallest zone.
  */
 export function heightDescriptor(
   indexFromTallest: number,
@@ -21,93 +16,77 @@ export function heightDescriptor(
   return indexFromTallest < mid ? "Tall" : "Short";
 }
 
-/**
- * Split students into height zones. Zone S{n} is the tallest, S1 the
- * shortest. Extra students go to the tallest zones first because the
- * back rows (which the tallest zones fill) hold more people.
- */
-export function calculateHeightGroups(
-  totalStudents: number,
-  groupCount: HeightGroupCount,
-): HeightGroup[] {
-  const students = Math.max(0, totalStudents);
-  const base = Math.floor(students / groupCount);
-  const remainder = students % groupCount;
-
-  const groups: HeightGroup[] = [];
-  for (let i = 0; i < groupCount; i++) {
-    // i = 0 → tallest → highest id number.
-    groups.push({
-      id: `S${groupCount - i}`,
-      indexFromTallest: i,
-      descriptor: heightDescriptor(i, groupCount),
-      count: base + (i < remainder ? 1 : 0),
-    });
-  }
-  return groups;
-}
-
 export interface RowStudentCapacity {
   rowNumber: number;
   /** Seats in the row available for students (row size minus teachers). */
   studentCapacity: number;
 }
 
-export interface GroupAssignment {
+export interface ZoneAssignment {
+  groups: HeightGroup[];
   spans: GroupRowSpan[];
   slices: RowGroupSlice[];
-  /** Students that did not fit in any row. */
-  unplaced: number;
 }
 
 /**
- * Fill rows from the back with the tallest groups first.
- * Produces both per-group row ranges (for queue signs) and per-row
- * composition (for the visual layout and row labels).
+ * Build height zones aligned to row boundaries.
+ *
+ * Every zone covers one or more whole rows, and its student count is
+ * exactly the summed student capacity of those rows. Queueing then
+ * becomes exact: a queue empties into its row(s) and the row comes out
+ * full — no splitting a queue mid-flow with verbal instructions, and
+ * a miscount is caught the moment a queue and its row don't match.
+ *
+ * The requested zone count (5/7/9) is a maximum: with 8 rows and 9
+ * requested zones you get 8 zones (one queue per row). With fewer
+ * zones than rows, adjacent rows merge into one zone, extra rows going
+ * to the back zones (they are called first).
  */
-export function assignGroupsToRows(
+export function buildRowAlignedZones(
   rowCapacities: RowStudentCapacity[],
-  groups: HeightGroup[],
-): GroupAssignment {
-  const backFirst = [...rowCapacities].sort(
-    (a, b) => b.rowNumber - a.rowNumber,
-  );
-  const slices: RowGroupSlice[] = [];
+  requestedZones: number,
+): ZoneAssignment {
+  const backFirst = rowCapacities
+    .filter((r) => r.studentCapacity > 0)
+    .sort((a, b) => b.rowNumber - a.rowNumber);
+  if (backFirst.length === 0) return { groups: [], spans: [], slices: [] };
+
+  const zoneCount = Math.max(1, Math.min(requestedZones, backFirst.length));
+  const baseRows = Math.floor(backFirst.length / zoneCount);
+  const extraRows = backFirst.length % zoneCount;
+
+  const groups: HeightGroup[] = [];
   const spans: GroupRowSpan[] = [];
+  const slices: RowGroupSlice[] = [];
 
   let rowIdx = 0;
-  let roomInRow = backFirst.length > 0 ? backFirst[0].studentCapacity : 0;
-  let unplaced = 0;
+  for (let z = 0; z < zoneCount; z++) {
+    const take = baseRows + (z < extraRows ? 1 : 0);
+    const zoneRows = backFirst.slice(rowIdx, rowIdx + take);
+    rowIdx += take;
 
-  for (const group of groups) {
-    let remaining = group.count;
-    let fromRow: number | null = null;
-    let toRow: number | null = null;
-
-    while (remaining > 0 && rowIdx < backFirst.length) {
-      if (roomInRow <= 0) {
-        rowIdx += 1;
-        if (rowIdx >= backFirst.length) break;
-        roomInRow = backFirst[rowIdx].studentCapacity;
-        continue;
-      }
-      const row = backFirst[rowIdx];
-      const take = Math.min(remaining, roomInRow);
-      slices.push({ rowNumber: row.rowNumber, groupId: group.id, count: take });
-      fromRow = fromRow ?? row.rowNumber;
-      toRow = row.rowNumber;
-      remaining -= take;
-      roomInRow -= take;
-    }
-
-    unplaced += remaining;
-    spans.push({
-      groupId: group.id,
-      fromRow: fromRow ?? 0,
-      toRow: toRow ?? 0,
-      placed: group.count - remaining,
+    const id = `S${zoneCount - z}`;
+    const count = zoneRows.reduce((sum, r) => sum + r.studentCapacity, 0);
+    groups.push({
+      id,
+      indexFromTallest: z,
+      descriptor: heightDescriptor(z, zoneCount),
+      count,
     });
+    spans.push({
+      groupId: id,
+      fromRow: zoneRows[0].rowNumber,
+      toRow: zoneRows[zoneRows.length - 1].rowNumber,
+      placed: count,
+    });
+    for (const row of zoneRows) {
+      slices.push({
+        rowNumber: row.rowNumber,
+        groupId: id,
+        count: row.studentCapacity,
+      });
+    }
   }
 
-  return { spans, slices, unplaced };
+  return { groups, spans, slices };
 }

@@ -42,7 +42,9 @@ export function SectionCard({
 }) {
   return (
     <section
-      className={`rounded-3xl bg-white p-5 shadow-sm border border-slate-200 ${className}`}
+      // min-w-0 lets cards shrink to the viewport in grid/flex layouts
+      // even when they contain wide scrollable content (the stage SVG).
+      className={`min-w-0 rounded-3xl bg-white p-4 shadow-sm border border-slate-200 sm:p-5 ${className}`}
     >
       {(title || action) && (
         <div className="mb-4 flex items-center justify-between gap-3">

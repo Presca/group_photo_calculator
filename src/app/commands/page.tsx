@@ -33,13 +33,13 @@ export default function CommandsPage() {
   const command = layout.commands[clamped];
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col">
-      <div className="text-lg font-bold text-slate-500">
+    <div className="flex min-h-[calc(100dvh-12rem)] flex-col md:min-h-[calc(100vh-8rem)]">
+      <div className="text-base font-bold text-slate-500 sm:text-lg">
         Command {clamped + 1} of {layout.commands.length}
       </div>
 
-      <div className="my-4 flex flex-1 items-center justify-center rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-        <p className="max-w-3xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
+      <div className="my-3 flex flex-1 items-center justify-center rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:my-4 sm:p-10">
+        <p className="max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-5xl lg:text-6xl">
           “{command}”
         </p>
       </div>

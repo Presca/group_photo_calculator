@@ -248,39 +248,48 @@ export function StitchPanel({ layout }: { layout: StageLayout }) {
 
 export function LiveAdjustBar() {
   const { state, adjustCount } = useSession();
-  const items: {
+  const clusters: {
     label: string;
     field: "totalStudents" | "totalTeachers";
-    delta: number;
+    value: number;
   }[] = [
-    { label: "− Student", field: "totalStudents", delta: -1 },
-    { label: "+ Student", field: "totalStudents", delta: 1 },
-    { label: "− Teacher", field: "totalTeachers", delta: -1 },
-    { label: "+ Teacher", field: "totalTeachers", delta: 1 },
+    { label: "Students", field: "totalStudents", value: state.config.totalStudents },
+    { label: "Teachers", field: "totalTeachers", value: state.config.totalTeachers },
   ];
   return (
-    <div className="no-print sticky bottom-0 z-30 -mx-4 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-2">
-        <div className="hidden shrink-0 pr-2 text-sm font-bold uppercase tracking-wide text-slate-500 sm:block">
-          Adjust live
-        </div>
-        {items.map((item) => (
-          <button
-            key={item.label}
-            className="min-h-14 flex-1 rounded-2xl border-2 border-slate-300 bg-white text-lg font-extrabold active:bg-slate-100"
-            onClick={() => adjustCount(item.field, item.delta)}
+    // Sits just above the bottom tab bar on phones, at the very bottom
+    // on wide screens where the nav is at the top.
+    <div className="no-print sticky bottom-16 z-30 -mx-3 border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4 sm:py-3 md:bottom-0">
+      <div className="mx-auto flex max-w-6xl items-stretch gap-2 sm:gap-3">
+        {clusters.map((cluster) => (
+          <div
+            key={cluster.field}
+            className="flex flex-1 items-stretch overflow-hidden rounded-2xl border-2 border-slate-300 bg-white"
           >
-            {item.label}
-          </button>
+            <button
+              aria-label={`Remove one of ${cluster.label}`}
+              className="min-h-14 w-14 shrink-0 text-2xl font-extrabold text-slate-700 active:bg-slate-100"
+              onClick={() => adjustCount(cluster.field, -1)}
+            >
+              −
+            </button>
+            <div className="flex min-w-0 flex-1 flex-col items-center justify-center border-x-2 border-slate-200 px-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:text-xs">
+                {cluster.label}
+              </span>
+              <span className="text-xl font-extrabold tabular-nums leading-none sm:text-2xl">
+                {cluster.value}
+              </span>
+            </div>
+            <button
+              aria-label={`Add one of ${cluster.label}`}
+              className="min-h-14 w-14 shrink-0 text-2xl font-extrabold text-slate-700 active:bg-slate-100"
+              onClick={() => adjustCount(cluster.field, 1)}
+            >
+              +
+            </button>
+          </div>
         ))}
-        <div className="shrink-0 pl-2 text-right tabular-nums">
-          <div className="text-sm font-bold text-slate-500">
-            {state.config.totalStudents} students
-          </div>
-          <div className="text-sm font-bold text-slate-500">
-            {state.config.totalTeachers} teachers
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -52,12 +52,41 @@ describe("generateLayout", () => {
     expect(principal.seatNumber).toBe(Math.ceil(row1.seats.length / 2));
   });
 
-  it("builds one queue per non-empty height group", () => {
+  it("builds one queue per row, each holding exactly its row's students", () => {
     const layout = generateLayout(baseConfig);
-    expect(layout.queues).toHaveLength(9);
+    // 9 zones requested but only 8 rows → 8 queues.
+    expect(layout.queues).toHaveLength(8);
+    const rowByNumber = new Map(
+      layout.rowsResult.rows.map((r) => [r.rowNumber, r]),
+    );
     expect(layout.queues[0].letter).toBe("A");
-    expect(layout.queues[0].groupId).toBe("S9");
     expect(layout.queues[0].fromRow).toBe(8);
+    expect(layout.queues[0].toRow).toBe(8);
+    // Front-seated teachers, so every standing seat is a student seat.
+    expect(layout.queues[0].count).toBe(rowByNumber.get(8)!.size);
+    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(300);
+  });
+
+  it("merges adjacent rows into a queue when fewer zones are requested", () => {
+    const layout = generateLayout({ ...baseConfig, heightGroupCount: 5 });
+    expect(layout.queues).toHaveLength(5);
+    // 8 rows into 5 queues: extra rows go to the back queues.
+    expect(layout.queues[0].fromRow).toBe(8);
+    expect(layout.queues[0].toRow).toBe(7);
+    expect(layout.queues[4].fromRow).toBe(1);
+    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(300);
+  });
+
+  it("excludes standing teachers from queue counts", () => {
+    const layout = generateLayout({
+      ...baseConfig,
+      teacherLayout: "front-standing",
+    });
+    const row1 = layout.rowsResult.rows.find((r) => r.rowNumber === 1)!;
+    const frontQueue = layout.queues[layout.queues.length - 1];
+    expect(frontQueue.toRow).toBe(1);
+    expect(frontQueue.count).toBe(row1.size - 20);
+    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(300);
   });
 
   it("produces a stitch plan only in stitch mode", () => {
