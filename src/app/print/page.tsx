@@ -248,6 +248,9 @@ function QueueGuide({ layout }: { layout: StageLayout }) {
             {queue.letter}
           </div>
           <div className="mt-6 text-7xl font-black">{queue.descriptor}</div>
+          <div className="mt-1 text-4xl font-black text-slate-400">
+            Height {queue.rank}
+          </div>
           <div className="mt-8 rounded-2xl bg-slate-900 px-8 py-4 text-4xl font-black text-white">
             {formatRowRange(queue.fromRow, queue.toRow)}
           </div>
@@ -298,6 +301,7 @@ function ZoneGuide({ layout }: { layout: StageLayout }) {
         <thead>
           <tr className="border-b-2 border-slate-300 text-sm font-bold uppercase text-slate-500">
             <th className="py-2">Queue</th>
+            <th className="py-2">#</th>
             <th className="py-2">Height</th>
             <th className="py-2">Students</th>
             <th className="py-2">Rows</th>
@@ -309,6 +313,7 @@ function ZoneGuide({ layout }: { layout: StageLayout }) {
               <td className="py-2 font-extrabold text-blue-700">
                 {queue.letter}
               </td>
+              <td className="py-2 font-extrabold tabular-nums">{queue.rank}</td>
               <td className="py-2 font-extrabold">{queue.descriptor}</td>
               <td className="py-2 tabular-nums">{queue.count}</td>
               <td className="py-2">

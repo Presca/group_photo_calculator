@@ -41,6 +41,11 @@ export interface ZoneAssignment {
  * requested zones you get 8 zones (one queue per row). With fewer
  * zones than rows, adjacent rows merge into one zone, extra rows going
  * to the back zones (they are called first).
+ *
+ * Set rule — front-to-back the height groups run 2, 1, 3, 4, 5 …:
+ * the second-shortest group takes the front row (typically seated) and
+ * the shortest group stands behind them in row 2, so nobody is hidden.
+ * From row 3 back it ascends normally to the tallest.
  */
 export function buildRowAlignedZones(
   rowCapacities: RowStudentCapacity[],
@@ -50,6 +55,17 @@ export function buildRowAlignedZones(
     .filter((r) => r.studentCapacity > 0)
     .sort((a, b) => b.rowNumber - a.rowNumber);
   if (backFirst.length === 0) return { groups: [], spans: [], slices: [] };
+
+  // Swap the two front-most rows so the shortest group lands in row 2
+  // and the second-shortest in the front row (…3, 2, 1 becomes …3, 1, 2
+  // reading back-to-front, i.e. 2, 1, 3, 4, 5 from the front).
+  if (backFirst.length >= 2) {
+    const last = backFirst.length - 1;
+    [backFirst[last - 1], backFirst[last]] = [
+      backFirst[last],
+      backFirst[last - 1],
+    ];
+  }
 
   const zoneCount = Math.max(1, Math.min(requestedZones, backFirst.length));
   const baseRows = Math.floor(backFirst.length / zoneCount);
@@ -69,6 +85,7 @@ export function buildRowAlignedZones(
     const count = zoneRows.reduce((sum, r) => sum + r.studentCapacity, 0);
     groups.push({
       id,
+      rank: zoneCount - z,
       indexFromTallest: z,
       descriptor: heightDescriptor(z, zoneCount),
       count,

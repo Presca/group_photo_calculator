@@ -70,8 +70,8 @@ export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
         heading: "NOW CALL",
         primary: `QUEUE ${letter}`,
         detail: span
-          ? `${group.descriptor} — fill ${formatRowRange(span.fromRow, span.toRow)}, tallest leads`
-          : `${group.descriptor} — move to your row`,
+          ? `Height ${group.rank} (${group.descriptor}) — fill ${formatRowRange(span.fromRow, span.toRow)}, tallest leads`
+          : `Height ${group.rank} (${group.descriptor}) — move to your row`,
         queueLetter: letter,
         rowNumber:
           span && span.fromRow === span.toRow ? span.fromRow : undefined,

@@ -31,9 +31,15 @@ describe("buildRowAlignedZones", () => {
     expect(groups[0].descriptor).toBe("Tallest");
     expect(groups[0].count).toBe(38); // row 8's capacity
     expect(spans[0]).toMatchObject({ groupId: "S8", fromRow: 8, toRow: 8 });
-    // Shortest zone is exactly the front row.
+    // Set rule 2,1,3,4,5: the shortest zone stands in ROW 2 and the
+    // second-shortest takes the front row, so nobody is hidden.
     expect(groups[7].descriptor).toBe("Shortest");
-    expect(spans[7]).toMatchObject({ fromRow: 1, toRow: 1 });
+    expect(spans[7]).toMatchObject({ fromRow: 2, toRow: 2 });
+    expect(groups[6].descriptor).toBe("Short");
+    expect(spans[6]).toMatchObject({ fromRow: 1, toRow: 1 });
+    // Ranks are 1 = shortest … N = tallest.
+    expect(groups[0].rank).toBe(8);
+    expect(groups[7].rank).toBe(1);
     // Each row appears in exactly one slice with its full capacity.
     expect(slices).toHaveLength(8);
   });
@@ -58,22 +64,24 @@ describe("buildRowAlignedZones", () => {
     expect(spans[0]).toMatchObject({ fromRow: 8, toRow: 7 });
     expect(spans[1]).toMatchObject({ fromRow: 6, toRow: 5 });
     expect(spans[2]).toMatchObject({ fromRow: 4, toRow: 3 });
-    expect(spans[3]).toMatchObject({ fromRow: 2, toRow: 2 });
-    expect(spans[4]).toMatchObject({ fromRow: 1, toRow: 1 });
+    // Front two rows swap: …, row 1, row 2 (the 2,1 of 2,1,3,4,5).
+    expect(spans[3]).toMatchObject({ fromRow: 1, toRow: 1 });
+    expect(spans[4]).toMatchObject({ fromRow: 2, toRow: 2 });
     expect(groups[0].count).toBe(20);
     expect(groups[4].count).toBe(10);
   });
 
-  it("spans are contiguous back-to-front with no gaps or overlaps", () => {
-    const { spans } = buildRowAlignedZones(
+  it("covers every row exactly once, tallest at the back", () => {
+    const { spans, slices } = buildRowAlignedZones(
       rows([5, 6, 7, 8, 9, 10, 11]),
       5,
     );
-    for (let i = 1; i < spans.length; i++) {
-      expect(spans[i].fromRow).toBe(spans[i - 1].toRow - 1);
-    }
+    // Tallest zone is the back row; the front two rows swap so the
+    // shortest zone lands in row 2.
     expect(spans[0].fromRow).toBe(7);
-    expect(spans[spans.length - 1].toRow).toBe(1);
+    expect(spans[spans.length - 1].toRow).toBe(2);
+    const covered = slices.map((s) => s.rowNumber).sort((a, b) => a - b);
+    expect(covered).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   it("skips rows with no student seats", () => {

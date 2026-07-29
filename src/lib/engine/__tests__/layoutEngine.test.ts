@@ -105,10 +105,13 @@ describe("generateLayout", () => {
     expect(layout.queues[0].letter).toBe("A");
     expect(layout.queues[0].fromRow).toBe(backRow);
     expect(layout.queues[0].count).toBe(rowByNumber.get(backRow)!.size);
-    // Front queue excludes the 20 teacher seats.
-    const front = layout.queues[layout.queues.length - 1];
-    expect(front.toRow).toBe(1);
-    expect(front.count).toBe(rowByNumber.get(1)!.size - 20);
+    // Set rule 2,1,3,4,5: the last queue (shortest) fills ROW 2, and
+    // the one before it takes the front row minus the teacher block.
+    const shortest = layout.queues[layout.queues.length - 1];
+    expect(shortest.toRow).toBe(2);
+    expect(shortest.rank).toBe(1);
+    const frontRowQueue = layout.queues.find((q) => q.toRow === 1)!;
+    expect(frontRowQueue.count).toBe(rowByNumber.get(1)!.size - 20);
     expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(280);
   });
 

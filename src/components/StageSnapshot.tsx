@@ -65,7 +65,7 @@ export function StageSnapshot({
     layout.rowSlices.map((s) => [s.rowNumber, s.groupId]),
   );
   const descriptorByZone = new Map(
-    layout.groups.map((g) => [g.id, g.descriptor]),
+    layout.groups.map((g) => [g.id, `${g.rank} · ${g.descriptor}`]),
   );
   const teacherCountByRow = new Map(
     layout.teacherRows.map((t) => [t.rowNumber, t.count]),

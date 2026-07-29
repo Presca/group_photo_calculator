@@ -69,6 +69,8 @@ export interface RowCalculationResult {
 export interface HeightGroup {
   /** e.g. "S9". Higher number = taller. */
   id: string;
+  /** Height rank shown to people: 1 = shortest, N = tallest. */
+  rank: number;
   /** 0 = tallest group. */
   indexFromTallest: number;
   /** Human descriptor: Tallest / Tall / Medium / Short / Shortest. */
@@ -135,6 +137,8 @@ export interface QueuePlan {
   /** "A", "B", ... */
   letter: string;
   groupId: string;
+  /** Height rank: 1 = shortest, N = tallest. */
+  rank: number;
   descriptor: string;
   fromRow: number;
   toRow: number;

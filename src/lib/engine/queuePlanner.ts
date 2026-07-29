@@ -16,6 +16,7 @@ export function planQueues(
       return {
         letter: String.fromCharCode(65 + i),
         groupId: group.id,
+        rank: group.rank,
         descriptor: group.descriptor,
         fromRow: span?.fromRow ?? 0,
         toRow: span?.toRow ?? 0,
