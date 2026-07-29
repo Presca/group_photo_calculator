@@ -118,6 +118,25 @@ describe("generateLayout", () => {
     expect(queueSteps.every((s) => s.rowNumber !== undefined)).toBe(true);
   });
 
+  it("puts the odd person out at the side of the 2nd-last row, marked extra", () => {
+    // 281 students + 20 teachers = 301 people: the strict pattern
+    // holds 300, so one extra stands aside.
+    const layout = generateLayout({ ...baseConfig, totalStudents: 281 });
+    expect(layout.rowsResult.extras).toBe(1);
+    const backRow = layout.rowsResult.rows.length;
+    expect(layout.extras).toEqual({ rowNumber: backRow - 1, count: 1 });
+    // Every row still strictly follows the pattern.
+    expect(layout.rowsResult.rows.every((r) => !r.parityRelaxed)).toBe(true);
+    // The extra is a flagged seat at the side of that row.
+    const row = layout.seatRows.find((r) => r.rowNumber === backRow - 1)!;
+    const extraSeats = row.seats.filter((s) => s.occupant.extra);
+    expect(extraSeats).toHaveLength(1);
+    expect(extraSeats[0].seatNumber).toBe(row.seats.length);
+    // Queue counts include the extra so nobody is lost.
+    expect(layout.queues.reduce((s, q) => s + q.count, 0)).toBe(281);
+    expect(layout.warnings.join(" ")).toMatch(/extra/i);
+  });
+
   it("keeps the front row odd and the second even (set rule 3)", () => {
     const layout = generateLayout(baseConfig);
     expect(layout.rowsResult.rows[0].size % 2).toBe(1);

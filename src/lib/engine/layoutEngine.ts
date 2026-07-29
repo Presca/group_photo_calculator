@@ -5,7 +5,11 @@ import {
   type RowStudentCapacity,
 } from "./heightGroups";
 import { planQueues } from "./queuePlanner";
-import { calculateRows, maxPeoplePerRow } from "./rowCalculator";
+import {
+  calculateRows,
+  maxPeoplePerRow,
+  strictRowCapacity,
+} from "./rowCalculator";
 import { planStitch } from "./stitchPlanner";
 import {
   assignTeachersFrontFirst,
@@ -71,8 +75,18 @@ export function generateLayout(
   // needs at this stage width.
   const totalTeachers = config.totalTeachers + config.vipTeachers;
   const totalPeople = config.totalStudents + totalTeachers;
-  const rowCount =
-    maxPerRow > 0 ? Math.max(1, Math.ceil(totalPeople / maxPerRow)) : 0;
+  // Strict odd/even rows hold slightly less than rowCount × max, so
+  // grow the row count until the pattern fits everyone (the one
+  // arithmetic remainder is allowed — they stand at the side).
+  let rowCount = maxPerRow > 0 ? Math.max(1, Math.ceil(totalPeople / maxPerRow)) : 0;
+  let rowGuard = 0;
+  while (
+    rowCount > 0 &&
+    strictRowCapacity(rowCount, maxPerRow) < totalPeople - 1 &&
+    rowGuard++ < 100
+  ) {
+    rowCount += 1;
+  }
   const rowsResult = calculateRows({
     peopleCount: totalPeople,
     rowCount,
@@ -97,12 +111,35 @@ export function generateLayout(
     .map(([rowNumber, seats]) => ({ rowNumber, count: seats.length }))
     .sort((a, b) => a.rowNumber - b.rowNumber);
 
+  // Extras (the odd person out of the strict pattern) stand at the
+  // sides of the 2nd-last row — 3rd-last if the 2nd-last is pinned.
+  const rowNumbers = rowsResult.rows.map((r) => r.rowNumber);
+  let extrasRow = 0;
+  if (rowsResult.extras > 0 && rowNumbers.length > 0) {
+    const back = rowNumbers[rowNumbers.length - 1];
+    const candidates = [back - 1, back - 2, back].filter((r) =>
+      rowNumbers.includes(r),
+    );
+    extrasRow =
+      candidates.find((r) => rowOverrides[r] === undefined) ?? candidates[0];
+    warnings.push(
+      `${rowsResult.extras} extra ${rowsResult.extras === 1 ? "person stands" : "people stand"} at the side of Row ${extrasRow} — marked in amber.`,
+    );
+  }
+  const extras =
+    rowsResult.extras > 0 && extrasRow > 0
+      ? { rowNumber: extrasRow, count: rowsResult.extras }
+      : null;
+
   // Height zones cover students only; rows fully occupied by teachers
-  // (usually the front row) are skipped automatically.
+  // (usually the front row) are skipped automatically. Extras join
+  // their row's cohort so queue counts stay exact.
   const capacities: RowStudentCapacity[] = rowsResult.rows.map((r) => ({
     rowNumber: r.rowNumber,
     studentCapacity:
-      r.size - (assignment.seatsByRow.get(r.rowNumber)?.length ?? 0),
+      r.size -
+      (assignment.seatsByRow.get(r.rowNumber)?.length ?? 0) +
+      (extras && r.rowNumber === extras.rowNumber ? extras.count : 0),
   }));
   // One height zone (and therefore one queue) per student-holding row
   // — computed automatically, nothing to configure.
@@ -113,6 +150,7 @@ export function generateLayout(
     rowsResult.rows,
     assignment,
     zoneAssignment.slices,
+    extras,
   );
 
   const queues = planQueues(groups, zoneAssignment.spans);
@@ -167,6 +205,7 @@ export function generateLayout(
     seatRows,
     queues,
     rowLabels,
+    extras,
     stitch,
     steps: buildOperationSteps(commandCtx),
     commands: buildCommandScript(commandCtx),
@@ -199,6 +238,7 @@ function buildSeatRows(
   rows: RowPlan[],
   assignment: TeacherAssignment,
   slices: StageLayout["rowSlices"],
+  extras: { rowNumber: number; count: number } | null,
 ): SeatRow[] {
   const teachersBySeat = new Map<string, (typeof assignment.plans)[number]>();
   for (const t of assignment.plans) {
@@ -206,7 +246,10 @@ function buildSeatRows(
   }
 
   return rows.map((row) => {
-    const seats: (Seat | null)[] = new Array(row.size).fill(null);
+    const extraCount =
+      extras && extras.rowNumber === row.rowNumber ? extras.count : 0;
+    const totalSeats = row.size + extraCount;
+    const seats: (Seat | null)[] = new Array(totalSeats).fill(null);
 
     for (let seatNumber = 1; seatNumber <= row.size; seatNumber++) {
       const teacher = teachersBySeat.get(`${row.rowNumber}:${seatNumber}`);
@@ -225,12 +268,14 @@ function buildSeatRows(
     }
 
     // Students fill the remaining seats in taper order: tallest of the
-    // row's cohort nearest the centre, shortest at the edges.
+    // row's cohort nearest the centre, shortest at the edges. Extras
+    // stand at the side, beyond the odd/even pattern.
     const available: number[] = [];
     for (let s = 1; s <= row.size; s++) {
       if (seats[s - 1] === null) available.push(s);
     }
     const fillOrder = centreLeftThenRightOrder(available, row.size);
+    for (let e = 1; e <= extraCount; e++) fillOrder.push(row.size + e);
 
     const rowSlices = slices.filter((s) => s.rowNumber === row.rowNumber);
     const studentQueue: string[] = [];
@@ -240,12 +285,13 @@ function buildSeatRows(
 
     fillOrder.forEach((seatNumber, i) => {
       const groupId = studentQueue[i];
+      const isExtra = seatNumber > row.size;
       seats[seatNumber - 1] = {
         rowNumber: row.rowNumber,
         seatNumber,
         occupant: groupId
-          ? { kind: "student", label: groupId, groupId }
-          : { kind: "student", label: "—" },
+          ? { kind: "student", label: groupId, groupId, extra: isExtra || undefined }
+          : { kind: "student", label: "—", extra: isExtra || undefined },
       };
     });
 

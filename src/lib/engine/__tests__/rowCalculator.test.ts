@@ -48,14 +48,18 @@ describe("calculateRows", () => {
     for (let count = 50; count <= 400; count += 7) {
       for (let rowCount = 2; rowCount <= 9; rowCount++) {
         const result = calculateRows({ peopleCount: count, rowCount, maxPerRow: 60 });
-        const relaxed = result.rows.filter((r) => r.parityRelaxed);
-        // At or over physical capacity the stage limits win over parity;
-        // otherwise at most one row may be relaxed.
-        if (result.ok) expect(relaxed.length).toBeLessThanOrEqual(1);
+        // Strict rule: generated rows never deviate from the pattern.
+        expect(result.rows.every((r) => !r.parityRelaxed)).toBe(true);
+        expect(result.extras).toBeLessThanOrEqual(1);
         for (const row of result.rows) {
-          if (row.parityRelaxed) continue;
           expect(parityOf(row.size)).toBe(targetParityForRow(row.rowNumber));
         }
+        // Everyone is accounted for: rows + extras + overflow.
+        expect(
+          result.rows.reduce((s, r) => s + r.size, 0) +
+            result.extras +
+            result.overflow,
+        ).toBe(count);
       }
     }
   });
@@ -86,12 +90,14 @@ describe("calculateRows", () => {
     const result = calculateRows({ peopleCount: 600, rowCount: 4, maxPerRow: 40 });
     expect(result.ok).toBe(false);
     expect(result.capacity).toBe(160);
-    expect(result.placed).toBe(160);
-    expect(result.overflow).toBe(440);
+    // Strict odd/even rows: 39 + 40 + 39 + 40.
+    expect(result.placed).toBe(158);
+    expect(result.overflow).toBe(442);
     expect(result.suggestions.join(" ")).toMatch(/row/i);
     expect(result.suggestions.join(" ")).toMatch(/stitch/i);
-    // Best-effort plan still fills the stage.
-    expect(result.rows.reduce((sum, r) => sum + r.size, 0)).toBe(160);
+    expect(result.rows.reduce((sum, r) => sum + r.size, 0)).toBe(158);
+    // Every row still strictly follows the pattern.
+    expect(result.rows.every((r) => !r.parityRelaxed)).toBe(true);
   });
 
   it("uses fewer rows when the group is tiny", () => {
@@ -100,12 +106,15 @@ describe("calculateRows", () => {
     expect(result.rows.reduce((sum, r) => sum + r.size, 0)).toBe(5);
   });
 
-  it("relaxes parity on a single row when totals make it impossible", () => {
-    // One row, even count: cannot be odd without dropping someone.
+  it("never relaxes parity — the odd person out becomes a side extra", () => {
+    // One row, even count: the row stays odd, one person stands aside.
     const result = calculateRows({ peopleCount: 20, rowCount: 1, maxPerRow: 40 });
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0].size).toBe(20);
-    expect(result.rows[0].parityRelaxed).toBe(true);
+    expect(result.rows[0].size).toBe(19);
+    expect(result.rows[0].parityRelaxed).toBe(false);
+    expect(result.extras).toBe(1);
+    expect(result.placed).toBe(20);
+    expect(result.overflow).toBe(0);
   });
 
   it("handles zero people gracefully", () => {
@@ -149,7 +158,10 @@ describe("calculateRows", () => {
     });
     expect(before.rows[7].size).toBe(40);
     expect(after.rows[7].size).toBe(40);
-    expect(after.rows.reduce((s, r) => s + r.size, 0)).toBe(301);
+    // 301st person: rows stay strict, one extra stands at the side.
+    expect(
+      after.rows.reduce((s, r) => s + r.size, 0) + after.extras,
+    ).toBe(301);
   });
 
   it("warns when pinned rows exceed the session total", () => {

@@ -31,7 +31,7 @@ export function zoneIsDark(groupId?: string): boolean {
 }
 
 interface BandSegment {
-  kind: "student" | "teacher";
+  kind: "student" | "teacher" | "extra";
   count: number;
   color: string;
 }
@@ -77,18 +77,21 @@ export function StageSnapshot({
         const size = row.seats.length;
         const zone = zoneByRow.get(row.rowNumber);
         const teacherCount = teacherCountByRow.get(row.rowNumber) ?? 0;
-        const studentCount = size - teacherCount;
+        const extraCount = row.seats.filter((s) => s.occupant.extra).length;
+        const official = size - extraCount;
+        const studentCount = official - teacherCount;
         const segments = buildSegments(row.seats, zone);
         const mostlyTeachers = teacherCount > size / 2;
         const darkText = mostlyTeachers || zoneIsDark(zone);
         // Mixed rows spell out the split so the count is never mistaken
-        // for "37 teachers": e.g. "30T + 7S".
-        const centreLabel =
+        // for "37 teachers": e.g. "30T + 7S". Extras show as "+1".
+        const base =
           teacherCount > 0
             ? studentCount > 0
               ? `${teacherCount}T + ${studentCount}S`
               : `${teacherCount}T`
-            : `${size}`;
+            : `${official}`;
+        const centreLabel = extraCount > 0 ? `${base} +${extraCount}` : base;
         const isPinned = pinned.has(row.rowNumber);
         return (
           <div key={row.rowNumber} className="flex justify-center">
@@ -162,6 +165,10 @@ export function StageSnapshot({
           <span className="inline-block h-3 w-5 rounded bg-slate-400" />
           Students (darker = taller)
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-3 w-5 rounded bg-amber-500" />
+          Extra — stands at the side
+        </span>
       </div>
     </div>
   );
@@ -174,15 +181,19 @@ function buildSegments(
 ): BandSegment[] {
   const segments: BandSegment[] = [];
   for (const seat of seats) {
-    const kind = seat.occupant.kind;
+    const kind: BandSegment["kind"] = seat.occupant.extra
+      ? "extra"
+      : seat.occupant.kind;
     const color =
-      kind === "teacher"
-        ? seat.occupant.role === "vip"
-          ? "#1e3a8a"
-          : "#3b82f6"
-        : zoneShade(zone);
+      kind === "extra"
+        ? "#f59e0b"
+        : kind === "teacher"
+          ? seat.occupant.role === "vip"
+            ? "#1e3a8a"
+            : "#3b82f6"
+          : zoneShade(zone);
     const last = segments[segments.length - 1];
-    if (last && last.kind === kind) {
+    if (last && last.kind === kind && last.color === color) {
       last.count += 1;
     } else {
       segments.push({ kind, count: 1, color });

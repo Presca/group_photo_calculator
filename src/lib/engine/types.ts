@@ -50,6 +50,11 @@ export interface RowCalculationResult {
   capacity: number;
   /** How many people the plan actually places (capped at capacity). */
   placed: number;
+  /**
+   * People who don't fit the strict odd/even pattern arithmetic. They
+   * stand at the sides of the 2nd/3rd-last row, marked distinctly.
+   */
+  extras: number;
   /** People that could not be placed (0 when ok). */
   overflow: number;
   warnings: string[];
@@ -106,6 +111,8 @@ export interface SeatOccupant {
   groupId?: string;
   teacherId?: string;
   role?: TeacherRole;
+  /** Stands at the side of the row, outside the odd/even pattern. */
+  extra?: boolean;
 }
 
 export interface Seat {
@@ -173,6 +180,8 @@ export interface StageLayout {
   seatRows: SeatRow[];
   queues: QueuePlan[];
   rowLabels: RowLabel[];
+  /** Extras standing at the sides of a row (odd person out). */
+  extras: { rowNumber: number; count: number } | null;
   stitch: StitchPhoto[] | null;
   steps: OperationStep[];
   commands: string[];

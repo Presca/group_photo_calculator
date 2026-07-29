@@ -157,7 +157,12 @@ function LayoutSheet({ layout }: { layout: StageLayout }) {
           {rowsBackFirst.map((row) => (
             <tr key={row.rowNumber} className="border-b border-slate-200">
               <td className="py-2 font-extrabold">Row {row.rowNumber}</td>
-              <td className="py-2 tabular-nums">{row.size}</td>
+              <td className="py-2 tabular-nums">
+                {row.size}
+                {layout.extras && layout.extras.rowNumber === row.rowNumber
+                  ? ` +${layout.extras.count} extra`
+                  : ""}
+              </td>
               <td className="py-2">
                 {[
                   ...layout.rowSlices
