@@ -151,7 +151,11 @@ export function StageSnapshot({
       </div>
       <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-5 rounded bg-blue-600" />
+          <span className="inline-block h-3 w-5 rounded bg-blue-900" />
+          VIPs
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-3 w-5 rounded bg-blue-500" />
           Teachers
         </span>
         <span className="flex items-center gap-1.5">
@@ -171,7 +175,12 @@ function buildSegments(
   const segments: BandSegment[] = [];
   for (const seat of seats) {
     const kind = seat.occupant.kind;
-    const color = kind === "teacher" ? "#2563eb" : zoneShade(zone);
+    const color =
+      kind === "teacher"
+        ? seat.occupant.role === "vip"
+          ? "#1e3a8a"
+          : "#3b82f6"
+        : zoneShade(zone);
     const last = segments[segments.length - 1];
     if (last && last.kind === kind) {
       last.count += 1;

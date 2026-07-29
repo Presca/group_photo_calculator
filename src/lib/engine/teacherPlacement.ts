@@ -6,37 +6,30 @@ export interface TeacherRosterEntry {
   role: TeacherRole;
 }
 
-/** How many of the first teachers are treated as senior staff. */
-const SENIOR_COUNT = 4;
-
 /**
- * Generate a placeholder roster: T1 is the Principal, the next few are
- * senior teachers, the rest are regular teachers. A future attendance
- * import can replace this with real names without touching placement.
+ * Generate a placeholder roster: VIP teachers first (they take
+ * precedence in layout and sequence — VIP 1 gets the centre seat),
+ * then regular teachers. A future attendance import can replace this
+ * with real names without touching placement.
  */
-export function generateTeacherRoster(count: number): TeacherRosterEntry[] {
+export function generateTeacherRoster(
+  vipCount: number,
+  teacherCount: number,
+): TeacherRosterEntry[] {
   const roster: TeacherRosterEntry[] = [];
-  for (let i = 1; i <= count; i++) {
-    const role: TeacherRole =
-      i === 1 ? "principal" : i <= 1 + SENIOR_COUNT ? "senior" : "teacher";
-    roster.push({
-      id: `T${i}`,
-      label:
-        role === "principal"
-          ? "Principal"
-          : role === "senior"
-            ? `Senior ${i - 1}`
-            : `Teacher ${i}`,
-      role,
-    });
+  for (let i = 1; i <= vipCount; i++) {
+    roster.push({ id: `V${i}`, label: `VIP ${i}`, role: "vip" });
+  }
+  for (let i = 1; i <= teacherCount; i++) {
+    roster.push({ id: `T${i}`, label: `Teacher ${i}`, role: "teacher" });
   }
   return roster;
 }
 
 /**
  * Seat numbers of a row of `size`, ordered centre-out: centre seat
- * first, then alternating right/left. The principal takes the first
- * entry, seniors the next ones, so seniority radiates from the centre.
+ * first, then alternating right/left. VIP 1 takes the first entry,
+ * so precedence radiates from the centre.
  */
 export function centreOutSeatOrder(size: number): number[] {
   const order: number[] = [];
@@ -79,9 +72,9 @@ export interface TeacherAssignment {
 
 /**
  * Set rule: teachers always take the front row, as a centred block
- * with the principal mid-row and seniors nearest the centre. Overflow
- * spills to the second row — spread evenly between students — then the
- * third, and so on.
+ * with the VIPs mid-row (VIP 1 dead centre). Overflow spills to the
+ * second row — spread evenly between students — then the third, and
+ * so on.
  */
 export function assignTeachersFrontFirst(
   rowSizes: { rowNumber: number; size: number }[],
@@ -99,8 +92,8 @@ export function assignTeachersFrontFirst(
 
     let seats: number[];
     if (r === 0) {
-      // Front row: centred block, centre-out so roster order (principal,
-      // seniors, …) radiates from the middle of the row.
+      // Front row: centred block, centre-out so roster order (VIPs
+      // first) radiates from the middle of the row.
       const blockStart = Math.floor((row.size - k) / 2);
       seats = centreOutSeatOrder(k).map((s) => s + blockStart);
     } else {

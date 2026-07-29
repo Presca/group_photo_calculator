@@ -11,14 +11,20 @@ export interface CommandContext {
   spans: GroupRowSpan[];
   /** Rows containing teachers, front first. */
   teacherRows: TeacherRowSummary[];
+  /** All teachers, VIPs included. */
   totalTeachers: number;
+  /** VIP teachers — they take precedence in layout and sequence. */
+  vipCount: number;
 }
 
 /** One-line description of where the teachers go. */
 export function teacherPlacementSummary(ctx: CommandContext): string {
   if (ctx.totalTeachers <= 0 || ctx.teacherRows.length === 0) return "";
   const [front, ...overflow] = ctx.teacherRows;
-  let summary = `Front row (Row ${front.rowNumber}) — principal in the centre`;
+  let summary =
+    ctx.vipCount > 0
+      ? `Front row (Row ${front.rowNumber}) — VIPs in the centre, teachers outward`
+      : `Front row (Row ${front.rowNumber}) — most senior in the centre`;
   if (overflow.length > 0) {
     summary +=
       "; " +
@@ -37,6 +43,14 @@ export function buildOperationSteps(ctx: CommandContext): OperationStep[] {
   const spanByGroup = new Map(ctx.spans.map((s) => [s.groupId, s]));
   const steps: OperationStep[] = [];
 
+  if (ctx.vipCount > 0 && ctx.teacherRows.length > 0) {
+    steps.push({
+      kind: "call",
+      heading: "NOW CALL",
+      primary: "VIPS",
+      detail: `Centre of the front row — VIP 1 dead centre`,
+    });
+  }
   if (ctx.totalTeachers > 0 && ctx.teacherRows.length > 0) {
     steps.push({
       kind: "call",
@@ -87,9 +101,14 @@ export function buildCommandScript(ctx: CommandContext): string[] {
 
   if (ctx.totalTeachers > 0 && ctx.teacherRows.length > 0) {
     const [front, ...overflow] = ctx.teacherRows;
-    commands.push(
-      `Teachers please take the front row. Principal in the centre.`,
-    );
+    if (ctx.vipCount > 0) {
+      commands.push("VIP teachers please take the centre of the front row.");
+      commands.push("Teachers please fill the front row outward from the VIPs.");
+    } else {
+      commands.push(
+        "Teachers please take the front row. Most senior in the centre.",
+      );
+    }
     for (const r of overflow) {
       commands.push(
         `Remaining ${r.count} teachers to Row ${r.rowNumber}, spread out between the students.`,

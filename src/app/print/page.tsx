@@ -183,9 +183,9 @@ function TeacherGuide({ layout }: { layout: StageLayout }) {
   return (
     <Sheet title="Teacher Guide" layout={layout}>
       <p className="mb-4 text-lg font-semibold text-slate-600">
-        Teachers take the front row: principal in the centre, senior staff
-        nearest the centre. Overflow teachers go to the next row, spread
-        evenly between the students.
+        Teachers take the front row: VIPs in the centre (VIP 1 dead centre),
+        teachers outward. Overflow teachers go to the next row, spread evenly
+        between the students.
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
         {layout.teacherRows
@@ -215,7 +215,7 @@ function TeacherGuide({ layout }: { layout: StageLayout }) {
                         <td className="py-1 tabular-nums">{t.seatNumber}</td>
                         <td className="py-1">
                           {t.label}
-                          {t.role === "principal" && " ★"}
+                          {t.role === "vip" && " ★"}
                         </td>
                       </tr>
                     ))}

@@ -132,7 +132,10 @@ export default function PlanPage() {
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <StatChip label="Students" value={state.config.totalStudents} />
-          <StatChip label="Teachers" value={state.config.totalTeachers} />
+          <StatChip
+            label="Teachers"
+            value={state.config.totalTeachers + state.config.vipTeachers}
+          />
           <StatChip
             label="Max / row"
             value={layout.maxPerRow}

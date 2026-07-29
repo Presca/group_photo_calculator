@@ -13,13 +13,17 @@ export type Parity = "odd" | "even";
 export interface SessionConfig {
   schoolName: string;
   totalStudents: number;
+  /** Regular teachers. */
   totalTeachers: number;
+  /**
+   * VIP teachers (principal, guests of honour). They take precedence:
+   * the centre-most front-row seats, and first in the call sequence.
+   */
+  vipTeachers: number;
   /** Usable stage width in metres. */
   stageWidthM: number;
   /** Average shoulder width per person in metres (editable default 0.45). */
   shoulderWidthM: number;
-  /** Number of rows / platform levels available (front row included). */
-  standingRows: number;
   photoMode: PhotoMode;
   /** Rows covered by each photo when stitching. */
   stitchRowsPerPhoto: number;
@@ -78,7 +82,7 @@ export interface RowGroupSlice {
   count: number;
 }
 
-export type TeacherRole = "principal" | "senior" | "teacher";
+export type TeacherRole = "vip" | "teacher";
 
 export interface TeacherPlan {
   id: string;

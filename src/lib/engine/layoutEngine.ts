@@ -27,10 +27,10 @@ import type {
 export const DEFAULT_CONFIG: SessionConfig = {
   schoolName: "",
   totalStudents: 300,
-  totalTeachers: 30,
+  totalTeachers: 25,
+  vipTeachers: 5,
   stageWidthM: 18,
   shoulderWidthM: 0.45,
-  standingRows: 9,
   photoMode: "single",
   stitchRowsPerPhoto: 3,
   stitchOverlapRows: 1,
@@ -43,9 +43,9 @@ export const DEFAULT_CONFIG: SessionConfig = {
  * changes rather than reshuffles).
  *
  * Set rules encoded here:
- * 1. Teachers always take the front row (principal centred, seniors
- *    nearest the centre). Overflow spills to Row 2, Row 3, … spread
- *    evenly between students.
+ * 1. Teachers always take the front row (VIPs centre-most, VIP 1 dead
+ *    centre). Overflow spills to Row 2, Row 3, … spread evenly
+ *    between students.
  * 2. Within every row the tallest stand in the middle, tapering to the
  *    shortest at the sides. Students file in from one queue, tallest
  *    first: fill left of centre outward, then right of centre outward
@@ -67,17 +67,25 @@ export function generateLayout(
   const maxPerRow = maxPeoplePerRow(config.stageWidthM, config.shoulderWidthM);
 
   // Teachers occupy row seats too, so everyone counts towards capacity.
-  const totalPeople = config.totalStudents + config.totalTeachers;
+  // Rows are computed automatically: exactly as many as the group
+  // needs at this stage width.
+  const totalTeachers = config.totalTeachers + config.vipTeachers;
+  const totalPeople = config.totalStudents + totalTeachers;
+  const rowCount =
+    maxPerRow > 0 ? Math.max(1, Math.ceil(totalPeople / maxPerRow)) : 0;
   const rowsResult = calculateRows({
     peopleCount: totalPeople,
-    rowCount: config.standingRows,
+    rowCount,
     maxPerRow,
     fixedSizes: rowOverrides,
   });
   warnings.push(...rowsResult.warnings);
   suggestions.push(...rowsResult.suggestions);
 
-  const roster = generateTeacherRoster(config.totalTeachers);
+  const roster = generateTeacherRoster(
+    config.vipTeachers,
+    config.totalTeachers,
+  );
   const assignment = assignTeachersFrontFirst(rowsResult.rows, roster);
   if (assignment.unplaced > 0) {
     warnings.push(
@@ -143,7 +151,8 @@ export function generateLayout(
     groups,
     spans: zoneAssignment.spans,
     teacherRows,
-    totalTeachers: config.totalTeachers,
+    totalTeachers,
+    vipCount: config.vipTeachers,
   };
 
   return {

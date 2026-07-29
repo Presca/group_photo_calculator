@@ -34,7 +34,7 @@ describe("assignTeachersFrontFirst", () => {
   ];
 
   it("puts all teachers in the front row when they fit, centred block", () => {
-    const roster = generateTeacherRoster(10);
+    const roster = generateTeacherRoster(2, 8);
     const { plans, seatsByRow, unplaced } = assignTeachersFrontFirst(
       rows,
       roster,
@@ -45,13 +45,14 @@ describe("assignTeachersFrontFirst", () => {
     // 10 teachers centred in a 37-seat row: seats 14..23.
     expect(Math.min(...seats)).toBe(14);
     expect(Math.max(...seats)).toBe(23);
-    // Principal lands mid-row.
-    const principal = plans.find((p) => p.role === "principal")!;
-    expect(Math.abs(principal.seatNumber - Math.ceil(37 / 2))).toBeLessThanOrEqual(1);
+    // VIP 1 lands mid-row.
+    const vip1 = plans.find((p) => p.id === "V1")!;
+    expect(vip1.role).toBe("vip");
+    expect(Math.abs(vip1.seatNumber - Math.ceil(37 / 2))).toBeLessThanOrEqual(1);
   });
 
   it("overflows to the second row, interspersed between students", () => {
-    const roster = generateTeacherRoster(60);
+    const roster = generateTeacherRoster(5, 55);
     const { plans, seatsByRow, unplaced } = assignTeachersFrontFirst(
       rows,
       roster,
@@ -70,7 +71,7 @@ describe("assignTeachersFrontFirst", () => {
   it("reports teachers who cannot fit at all", () => {
     const { unplaced } = assignTeachersFrontFirst(
       [{ rowNumber: 1, size: 5 }],
-      generateTeacherRoster(9),
+      generateTeacherRoster(0, 9),
     );
     expect(unplaced).toBe(4);
   });

@@ -15,32 +15,14 @@ export function WarningsBanner({ layout }: { layout: StageLayout }) {
           <li key={w}>{w}</li>
         ))}
       </ul>
-      {!layout.rowsResult.ok && (
-        <div className="mt-4 flex flex-wrap gap-3">
+      {!layout.rowsResult.ok && layout.config.photoMode === "single" && (
+        <div className="mt-4">
           <BigButton
             variant="secondary"
-            onClick={() =>
-              patchConfig({
-                standingRows: Math.max(
-                  layout.config.standingRows,
-                  Math.ceil(
-                    (layout.config.totalStudents + layout.config.totalTeachers) /
-                      Math.max(1, layout.maxPerRow),
-                  ),
-                ),
-              })
-            }
+            onClick={() => patchConfig({ photoMode: "stitch" })}
           >
-            Add rows to fit
+            Use stitched photos
           </BigButton>
-          {layout.config.photoMode === "single" && (
-            <BigButton
-              variant="secondary"
-              onClick={() => patchConfig({ photoMode: "stitch" })}
-            >
-              Use stitched photos
-            </BigButton>
-          )}
         </div>
       )}
     </div>
@@ -53,8 +35,8 @@ export function TeacherPanel({ layout }: { layout: StageLayout }) {
   return (
     <SectionCard title="Teacher Placement">
       <p className="mb-3 text-sm text-slate-600 sm:text-base">
-        Teachers always take the front row — principal in the centre, senior
-        staff nearest the centre. Overflow teachers spread out between the
+        Teachers always take the front row — VIPs in the centre (VIP 1 dead
+        centre), teachers outward. Overflow teachers spread out between the
         students in the next row(s).
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -92,7 +74,7 @@ function TeacherList({
       <ol className="space-y-1 text-sm font-semibold text-slate-600">
         {sorted.slice(0, 12).map((t) => (
           <li key={t.id} className="flex justify-between">
-            <span className={t.role === "principal" ? "text-blue-700" : ""}>
+            <span className={t.role === "vip" ? "font-extrabold text-blue-700" : ""}>
               {t.label}
             </span>
             <span>Seat {t.seatNumber}</span>

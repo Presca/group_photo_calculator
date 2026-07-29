@@ -7,16 +7,16 @@ import {
 } from "../layoutEngine";
 import type { SessionConfig } from "../types";
 
-// 280 students + 20 teachers = 300 people in 8 rows of ≤40:
-// row sizes [37,36,37,36,39,38,39,38] front-to-back.
+// 280 students + 20 teachers (5 VIP) = 300 people; rows are automatic:
+// ceil(300/40) = 8 rows, sizes [37,36,37,36,39,38,39,38] front-to-back.
 const baseConfig: SessionConfig = {
   ...DEFAULT_CONFIG,
   schoolName: "Test High",
   totalStudents: 280,
-  totalTeachers: 20,
+  totalTeachers: 15,
+  vipTeachers: 5,
   stageWidthM: 18,
   shoulderWidthM: 0.45,
-  standingRows: 8,
 };
 
 describe("generateLayout", () => {
@@ -27,17 +27,38 @@ describe("generateLayout", () => {
     expect(seats.filter((s) => s.occupant.kind === "teacher")).toHaveLength(20);
   });
 
-  it("always puts teachers in the front row, principal mid-row", () => {
+  it("computes the row count automatically from totals and stage width", () => {
+    expect(generateLayout(baseConfig).rowsResult.rows).toHaveLength(8);
+    expect(
+      generateLayout({ ...baseConfig, totalStudents: 320 }).rowsResult.rows,
+    ).toHaveLength(9); // 340 people / 40 per row
+  });
+
+  it("always puts teachers in the front row, VIP 1 mid-row", () => {
     const layout = generateLayout(baseConfig);
     expect(layout.teachers.every((t) => t.rowNumber === 1)).toBe(true);
     expect(layout.teacherRows).toEqual([{ rowNumber: 1, count: 20 }]);
     const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
-    const principal = row1.seats.find(
-      (s) => s.occupant.role === "principal",
-    )!;
+    const vip1 = row1.seats.find((s) => s.occupant.teacherId === "V1")!;
     expect(
-      Math.abs(principal.seatNumber - Math.ceil(row1.seats.length / 2)),
+      Math.abs(vip1.seatNumber - Math.ceil(row1.seats.length / 2)),
     ).toBeLessThanOrEqual(1);
+    // VIPs occupy the contiguous centre-most seats; regular teachers
+    // sit outside the VIP block on either side.
+    const vipSeats = row1.seats
+      .filter((s) => s.occupant.role === "vip")
+      .map((s) => s.seatNumber)
+      .sort((a, b) => a - b);
+    expect(vipSeats[vipSeats.length - 1] - vipSeats[0]).toBe(
+      vipSeats.length - 1,
+    );
+    for (const s of row1.seats) {
+      if (s.occupant.role !== "teacher") continue;
+      expect(
+        s.seatNumber < vipSeats[0] ||
+          s.seatNumber > vipSeats[vipSeats.length - 1],
+      ).toBe(true);
+    }
     // Students flank the teacher block at both edges of the front row.
     expect(row1.seats[0].occupant.kind).toBe("student");
     expect(row1.seats[row1.seats.length - 1].occupant.kind).toBe("student");
@@ -47,7 +68,8 @@ describe("generateLayout", () => {
     const layout = generateLayout({
       ...baseConfig,
       totalStudents: 240,
-      totalTeachers: 60,
+      totalTeachers: 55,
+      vipTeachers: 5,
     });
     const row1 = layout.seatRows.find((r) => r.rowNumber === 1)!;
     expect(row1.seats.every((s) => s.occupant.kind === "teacher")).toBe(true);
@@ -109,16 +131,10 @@ describe("generateLayout", () => {
     expect(stitched.stitch![0].fromRow).toBe(8);
   });
 
-  it("surfaces warnings when the stage is too small", () => {
-    const layout = generateLayout({
-      ...baseConfig,
-      totalStudents: 600,
-      standingRows: 4,
-      stageWidthM: 10,
-    });
+  it("surfaces warnings when the stage width fits nobody", () => {
+    const layout = generateLayout({ ...baseConfig, stageWidthM: 0.2 });
     expect(layout.rowsResult.ok).toBe(false);
     expect(layout.warnings.length).toBeGreaterThan(0);
-    expect(layout.suggestions.length).toBeGreaterThan(0);
   });
 });
 

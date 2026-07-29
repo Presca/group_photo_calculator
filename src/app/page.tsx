@@ -20,11 +20,10 @@ export default function SetupPage() {
   if (!state.hydrated) return null;
 
   const maxPerRow = maxPeoplePerRow(config.stageWidthM, config.shoulderWidthM);
-  // Teachers occupy row seats too (front row first), so everyone
-  // counts towards stage capacity.
-  const totalPeople = config.totalStudents + config.totalTeachers;
-  const capacity = maxPerRow * config.standingRows;
-  const fits = totalPeople <= capacity;
+  // Teachers (VIPs included) occupy row seats too, so everyone counts
+  // towards stage capacity. Rows are computed automatically.
+  const totalPeople =
+    config.totalStudents + config.totalTeachers + config.vipTeachers;
   const rowsNeeded = maxPerRow > 0 ? Math.ceil(totalPeople / maxPerRow) : 0;
 
   return (
@@ -51,13 +50,24 @@ export default function SetupPage() {
               onChange={(v) => patchConfig({ totalStudents: Math.round(v) })}
             />
             <NumberStepper
-              label="Total Teachers"
+              label="Teachers"
               value={config.totalTeachers}
               min={0}
               max={300}
               onChange={(v) => patchConfig({ totalTeachers: Math.round(v) })}
             />
+            <NumberStepper
+              label="VIP Teachers"
+              value={config.vipTeachers}
+              min={0}
+              max={50}
+              onChange={(v) => patchConfig({ vipTeachers: Math.round(v) })}
+            />
           </div>
+          <p className="-mt-2 text-sm font-semibold text-slate-500">
+            VIP teachers take precedence: centre of the front row, called
+            first.
+          </p>
 
           <div className="grid gap-5 sm:grid-cols-2">
             <NumberStepper
@@ -77,13 +87,6 @@ export default function SetupPage() {
               step={0.05}
               suffix="m"
               onChange={(v) => patchConfig({ shoulderWidthM: v })}
-            />
-            <NumberStepper
-              label="Rows (incl. front row)"
-              value={config.standingRows}
-              min={1}
-              max={12}
-              onChange={(v) => patchConfig({ standingRows: Math.round(v) })}
             />
           </div>
 
@@ -122,48 +125,26 @@ export default function SetupPage() {
         <SectionCard title="Stage Width Calculator">
           <div className="grid grid-cols-2 gap-3">
             <StatChip label="Max per row" value={maxPerRow} />
-            <StatChip
-              label="Stage capacity"
-              value={capacity}
-              tone={fits ? "good" : "bad"}
-            />
             <StatChip label="Total people" value={totalPeople} />
             <StatChip
-              label="Rows needed"
+              label="Rows (auto)"
               value={rowsNeeded}
-              tone={rowsNeeded <= config.standingRows ? "good" : "warn"}
+              tone={maxPerRow > 0 ? "good" : "bad"}
+            />
+            <StatChip
+              label="Photos"
+              value={layout.stitch ? layout.stitch.length : 1}
             />
           </div>
 
-          {!fits && (
-            <div className="mt-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
-              <p className="text-lg font-bold text-amber-900">
-                This group does not fit on the stage.
-              </p>
-              <p className="mt-1 text-amber-800">
-                {totalPeople - capacity} people over capacity. Choose a fix:
-              </p>
-              <div className="mt-3 grid gap-2">
-                <BigButton
-                  variant="secondary"
-                  onClick={() => patchConfig({ standingRows: rowsNeeded })}
-                >
-                  Use {rowsNeeded} rows instead
-                </BigButton>
-                {config.photoMode === "single" && (
-                  <BigButton
-                    variant="secondary"
-                    onClick={() => patchConfig({ photoMode: "stitch" })}
-                  >
-                    Switch to stitched photos
-                  </BigButton>
-                )}
-              </div>
-            </div>
-          )}
-          {fits && (
+          {maxPerRow <= 0 ? (
+            <p className="mt-4 text-lg font-bold text-red-700">
+              Check the stage and shoulder widths — nobody fits in a row.
+            </p>
+          ) : (
             <p className="mt-4 text-lg font-semibold text-emerald-700">
-              ✓ Everyone fits with the current stage settings.
+              ✓ Rows are calculated automatically — {rowsNeeded} rows for this
+              group.
             </p>
           )}
         </SectionCard>
