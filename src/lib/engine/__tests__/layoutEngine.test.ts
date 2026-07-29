@@ -79,14 +79,6 @@ describe("generateLayout", () => {
     expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(280);
   });
 
-  it("merges adjacent rows into a queue when fewer zones are requested", () => {
-    const layout = generateLayout({ ...baseConfig, heightGroupCount: 5 });
-    expect(layout.queues).toHaveLength(5);
-    expect(layout.queues[0].fromRow).toBe(8);
-    expect(layout.queues[0].toRow).toBe(7);
-    expect(layout.queues.reduce((sum, q) => sum + q.count, 0)).toBe(280);
-  });
-
   it("keeps the front row odd and the second even (set rule 3)", () => {
     const layout = generateLayout(baseConfig);
     expect(layout.rowsResult.rows[0].size % 2).toBe(1);

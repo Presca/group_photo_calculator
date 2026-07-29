@@ -97,19 +97,6 @@ export default function SetupPage() {
             onChange={(v) => patchConfig({ photoMode: v })}
           />
 
-          <SegmentedControl
-            label="Height zones / queues (max)"
-            value={String(config.heightGroupCount) as "5" | "7" | "9"}
-            options={[
-              { value: "5", label: "5 zones" },
-              { value: "7", label: "7 zones" },
-              { value: "9", label: "9 zones" },
-            ]}
-            onChange={(v) =>
-              patchConfig({ heightGroupCount: Number(v) as 5 | 7 | 9 })
-            }
-          />
-
           <div className="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr]">
             <BigButton
               onClick={() => {

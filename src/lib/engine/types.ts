@@ -8,7 +8,6 @@
  */
 
 export type PhotoMode = "single" | "stitch";
-export type HeightGroupCount = 5 | 7 | 9;
 export type Parity = "odd" | "even";
 
 export interface SessionConfig {
@@ -22,7 +21,6 @@ export interface SessionConfig {
   /** Number of rows / platform levels available (front row included). */
   standingRows: number;
   photoMode: PhotoMode;
-  heightGroupCount: HeightGroupCount;
   /** Rows covered by each photo when stitching. */
   stitchRowsPerPhoto: number;
   /** Rows shared between adjacent stitched photos. */

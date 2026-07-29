@@ -8,18 +8,12 @@ import {
   TeacherPanel,
   WarningsBanner,
 } from "@/components/planPanels";
-import {
-  BigButton,
-  EmptyState,
-  SectionCard,
-  SegmentedControl,
-  StatChip,
-} from "@/components/ui";
+import { BigButton, EmptyState, SectionCard, StatChip } from "@/components/ui";
 import { formatRowRange } from "@/lib/engine";
 import { useSession } from "@/store/SessionContext";
 
 export default function PlanPage() {
-  const { state, layout, patchConfig } = useSession();
+  const { state, layout } = useSession();
 
   if (!state.hydrated) return null;
 
@@ -69,23 +63,7 @@ export default function PlanPage() {
           />
         </div>
 
-        <SectionCard
-          title="Queues"
-          action={
-            <SegmentedControl
-              label=""
-              value={String(layout.config.heightGroupCount) as "5" | "7" | "9"}
-              options={[
-                { value: "5", label: "5" },
-                { value: "7", label: "7" },
-                { value: "9", label: "9" },
-              ]}
-              onChange={(v) =>
-                patchConfig({ heightGroupCount: Number(v) as 5 | 7 | 9 })
-              }
-            />
-          }
-        >
+        <SectionCard title="Queues">
           <p className="mb-3 text-sm font-semibold text-slate-500 sm:text-base">
             One queue per row, tallest first — fill left of centre outward,
             then right of centre outward. When a queue empties, its row is

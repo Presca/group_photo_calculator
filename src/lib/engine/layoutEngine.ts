@@ -31,7 +31,6 @@ export const DEFAULT_CONFIG: SessionConfig = {
   shoulderWidthM: 0.45,
   standingRows: 9,
   photoMode: "single",
-  heightGroupCount: 9,
   stitchRowsPerPhoto: 3,
   stitchOverlapRows: 1,
 };
@@ -87,10 +86,9 @@ export function generateLayout(config: SessionConfig): StageLayout {
     studentCapacity:
       r.size - (assignment.seatsByRow.get(r.rowNumber)?.length ?? 0),
   }));
-  const zoneAssignment = buildRowAlignedZones(
-    capacities,
-    config.heightGroupCount,
-  );
+  // One height zone (and therefore one queue) per student-holding row
+  // — computed automatically, nothing to configure.
+  const zoneAssignment = buildRowAlignedZones(capacities, capacities.length);
   const groups = zoneAssignment.groups;
 
   const seatRows = buildSeatRows(
