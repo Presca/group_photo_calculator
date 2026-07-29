@@ -1,21 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { StageCanvas } from "@/components/StageCanvas";
+import { StageSnapshot } from "@/components/StageSnapshot";
 import {
-  HeightGroupsPanel,
   LiveAdjustBar,
-  RowBreakdown,
   StitchPanel,
   TeacherPanel,
   WarningsBanner,
 } from "@/components/planPanels";
-import { BigButton, EmptyState, SectionCard, StatChip } from "@/components/ui";
+import {
+  BigButton,
+  EmptyState,
+  SectionCard,
+  SegmentedControl,
+  StatChip,
+} from "@/components/ui";
 import { formatRowRange } from "@/lib/engine";
 import { useSession } from "@/store/SessionContext";
 
 export default function PlanPage() {
-  const { state, layout, seatRows, addSwap, clearSwaps } = useSession();
+  const { state, layout, seatRows, addSwap, clearSwaps, patchConfig } =
+    useSession();
+  const [seatView, setSeatView] = useState(false);
 
   if (!state.hydrated) return null;
 
@@ -35,27 +43,19 @@ export default function PlanPage() {
 
   return (
     <>
-      <div className="grid gap-6 pb-24">
+      <div className="grid gap-4 pb-20 sm:gap-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-black tracking-tight">
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
               {state.config.schoolName || "Unnamed session"}
             </h1>
-            <p className="text-slate-500 font-semibold">
+            <p className="text-sm font-semibold text-slate-500 sm:text-base">
               {state.config.photoMode === "stitch"
                 ? "Multi-shot stitching"
                 : "Single photo"}{" "}
-              · {state.config.stageWidthM} m stage
+              · {state.config.stageWidthM} m stage ·{" "}
+              {layout.rowsResult.rows.length} rows
             </p>
-          </div>
-          <div className="grid grid-flow-col gap-3">
-            <StatChip label="Students" value={state.config.totalStudents} />
-            <StatChip label="Teachers" value={state.config.totalTeachers} />
-            <StatChip
-              label="Rows"
-              value={layout.rowsResult.rows.length}
-              tone={layout.rowsResult.ok ? "good" : "bad"}
-            />
           </div>
         </div>
 
@@ -64,33 +64,61 @@ export default function PlanPage() {
         <SectionCard
           title="Stage Layout"
           action={
-            state.swaps.length > 0 ? (
-              <BigButton variant="ghost" onClick={clearSwaps}>
-                Undo all swaps ({state.swaps.length})
-              </BigButton>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {seatView && state.swaps.length > 0 && (
+                <button
+                  className="min-h-10 rounded-xl px-3 text-sm font-bold text-slate-500 hover:bg-slate-100"
+                  onClick={clearSwaps}
+                >
+                  Undo swaps ({state.swaps.length})
+                </button>
+              )}
+              <button
+                className="min-h-10 rounded-xl border-2 border-slate-300 px-3 text-sm font-bold text-slate-600 active:bg-slate-100"
+                onClick={() => setSeatView((v) => !v)}
+              >
+                {seatView ? "Snapshot" : "Edit seats"}
+              </button>
+            </div>
           }
         >
-          <StageCanvas
-            seatRows={seatRows}
-            onSwap={(a, b) => addSwap({ a, b })}
-          />
+          {seatView ? (
+            <StageCanvas seatRows={seatRows} onSwap={(a, b) => addSwap({ a, b })} />
+          ) : (
+            <StageSnapshot layout={layout} />
+          )}
         </SectionCard>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <RowBreakdown layout={layout} />
-          <div className="grid content-start gap-6">
-            <HeightGroupsPanel layout={layout} />
-            <TeacherPanel layout={layout} />
-          </div>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <StatChip label="Students" value={state.config.totalStudents} />
+          <StatChip label="Teachers" value={state.config.totalTeachers} />
+          <StatChip
+            label="Max / row"
+            value={layout.maxPerRow}
+            tone={layout.rowsResult.ok ? "good" : "bad"}
+          />
         </div>
 
-        <StitchPanel layout={layout} />
-
-        <SectionCard title="Queues (one per row)">
+        <SectionCard
+          title="Queues"
+          action={
+            <SegmentedControl
+              label=""
+              value={String(layout.config.heightGroupCount) as "5" | "7" | "9"}
+              options={[
+                { value: "5", label: "5" },
+                { value: "7", label: "7" },
+                { value: "9", label: "9" },
+              ]}
+              onChange={(v) =>
+                patchConfig({ heightGroupCount: Number(v) as 5 | 7 | 9 })
+              }
+            />
+          }
+        >
           <p className="mb-3 text-sm font-semibold text-slate-500 sm:text-base">
-            Each queue holds exactly its row&apos;s student count — when a queue
-            empties, its row is full. If they don&apos;t match, a count is off.
+            One queue per row — when a queue empties, its row is full. If they
+            don&apos;t match, a count is off.
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {layout.queues.map((queue) => (
@@ -113,7 +141,7 @@ export default function PlanPage() {
               </div>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-2 sm:gap-3">
             <Link href="/print?only=queues">
               <BigButton variant="secondary">Print queue signs</BigButton>
             </Link>
@@ -125,6 +153,9 @@ export default function PlanPage() {
             </Link>
           </div>
         </SectionCard>
+
+        <StitchPanel layout={layout} />
+        <TeacherPanel layout={layout} />
       </div>
       <LiveAdjustBar />
     </>

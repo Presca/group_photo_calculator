@@ -2,7 +2,7 @@
 
 import { formatRowRange, type StageLayout } from "@/lib/engine";
 import { useSession } from "@/store/SessionContext";
-import { BigButton, SectionCard, SegmentedControl, NumberStepper } from "./ui";
+import { BigButton, SectionCard, NumberStepper } from "./ui";
 
 export function WarningsBanner({ layout }: { layout: StageLayout }) {
   const { patchConfig } = useSession();
@@ -44,115 +44,6 @@ export function WarningsBanner({ layout }: { layout: StageLayout }) {
         </div>
       )}
     </div>
-  );
-}
-
-export function RowBreakdown({ layout }: { layout: StageLayout }) {
-  const rowsBackFirst = [...layout.rowsResult.rows].sort(
-    (a, b) => b.rowNumber - a.rowNumber,
-  );
-  return (
-    <SectionCard title="Rows">
-      <div className="grid gap-2">
-        {rowsBackFirst.map((row) => {
-          const slices = layout.rowSlices.filter(
-            (s) => s.rowNumber === row.rowNumber,
-          );
-          return (
-            <div
-              key={row.rowNumber}
-              className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
-            >
-              <div>
-                <div className="text-xl font-extrabold">
-                  Row {row.rowNumber}
-                </div>
-                <div className="text-sm font-semibold text-slate-500">
-                  {slices.map((s) => s.groupId).join(" · ") || "—"}
-                  {row.parityRelaxed && " · parity relaxed"}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-extrabold tabular-nums">
-                  {row.size}
-                </div>
-                <div className="text-xs font-semibold uppercase text-slate-400">
-                  people
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {layout.seatedTeacherCount > 0 && (
-          <div className="flex items-center justify-between rounded-2xl bg-blue-50 px-4 py-3">
-            <div>
-              <div className="text-xl font-extrabold text-blue-900">
-                Seated row
-              </div>
-              <div className="text-sm font-semibold text-blue-700">
-                Teachers · principal centred
-              </div>
-            </div>
-            <div className="text-2xl font-extrabold tabular-nums text-blue-900">
-              {layout.seatedTeacherCount}
-            </div>
-          </div>
-        )}
-      </div>
-    </SectionCard>
-  );
-}
-
-export function HeightGroupsPanel({ layout }: { layout: StageLayout }) {
-  const { patchConfig } = useSession();
-  const spanByGroup = new Map(layout.groupSpans.map((s) => [s.groupId, s]));
-  return (
-    <SectionCard
-      title="Height Groups"
-      action={
-        <SegmentedControl
-          label=""
-          value={String(layout.config.heightGroupCount) as "5" | "7" | "9"}
-          options={[
-            { value: "5", label: "5" },
-            { value: "7", label: "7" },
-            { value: "9", label: "9" },
-          ]}
-          onChange={(v) =>
-            patchConfig({ heightGroupCount: Number(v) as 5 | 7 | 9 })
-          }
-        />
-      }
-    >
-      <div className="grid gap-2">
-        {layout.groups.map((group) => {
-          const span = spanByGroup.get(group.id);
-          return (
-            <div
-              key={group.id}
-              className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-11 w-14 items-center justify-center rounded-xl bg-slate-800 text-lg font-extrabold text-white">
-                  {group.id}
-                </span>
-                <div>
-                  <div className="font-bold">{group.descriptor}</div>
-                  <div className="text-sm font-semibold text-slate-500">
-                    {span && span.fromRow > 0
-                      ? formatRowRange(span.fromRow, span.toRow)
-                      : "Not placed"}
-                  </div>
-                </div>
-              </div>
-              <div className="text-2xl font-extrabold tabular-nums">
-                {group.count}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </SectionCard>
   );
 }
 

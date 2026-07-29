@@ -276,27 +276,38 @@ export function StageCanvas({
   );
 }
 
+const ZONE_SHADES = [
+  "#e2e8f0", // shortest
+  "#dbe1e8",
+  "#cbd5e1",
+  "#b6c2d1",
+  "#a3b1c2",
+  "#94a3b8",
+  "#8393aa",
+  "#71809b",
+  "#64748b", // tallest
+];
+
+/** Grey shade for a height zone id ("S1"…"S9"): taller = darker. */
+export function zoneShade(groupId?: string): string {
+  if (!groupId) return "#cbd5e1";
+  const n = Number(groupId.replace("S", ""));
+  if (!Number.isFinite(n)) return "#cbd5e1";
+  return ZONE_SHADES[Math.min(ZONE_SHADES.length - 1, Math.max(0, n - 1))];
+}
+
+/** Whether a zone's shade is dark enough to need white text on it. */
+export function zoneIsDark(groupId?: string): boolean {
+  if (!groupId) return false;
+  const n = Number(groupId.replace("S", ""));
+  return Number.isFinite(n) && n >= 6;
+}
+
 function seatFill(seat: Seat): string {
   if (seat.occupant.kind === "teacher") {
     return seat.occupant.role === "principal" ? "#1d4ed8" : "#3b82f6";
   }
-  // Shade students by height zone: taller (higher number) = darker.
-  const groupId = seat.occupant.groupId;
-  if (!groupId) return "#cbd5e1";
-  const n = Number(groupId.replace("S", ""));
-  if (!Number.isFinite(n)) return "#cbd5e1";
-  const shades = [
-    "#e2e8f0", // shortest
-    "#dbe1e8",
-    "#cbd5e1",
-    "#b6c2d1",
-    "#a3b1c2",
-    "#94a3b8",
-    "#8393aa",
-    "#71809b",
-    "#64748b", // tallest
-  ];
-  return shades[Math.min(shades.length - 1, Math.max(0, n - 1))];
+  return zoneShade(seat.occupant.groupId);
 }
 
 function seatDescription(seat: Seat): string {
